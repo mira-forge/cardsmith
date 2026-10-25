@@ -16,11 +16,10 @@ export const LICENSE_RAIL = "stripe" as LicenseRail;
 export const POLAR_PRO_PAGE_URL = "https://buy.polar.sh/polar_cl_D3ozPl07ac9pfNLzRSTsG9TGrprfa7jUBCUjN0uSgAc";
 
 /**
- * Where the "Get a license" button points for the Stripe rail: the Mira Forge pricing page,
- * which links to the monthly and yearly Payment Links. Empty = no button.
- * PLACEHOLDER until the Stripe account and Payment Links exist: "https://miraforge.dev/cardsmith#pricing".
+ * Where the "Get a license" button points for the Stripe rail: the live Cardsmith Pro Payment Link
+ * (Stripe Managed Payments / Link checkout, opened in the browser). Empty = no button.
  */
-export const STRIPE_PRO_PAGE_URL = "";
+export const STRIPE_PRO_PAGE_URL = "https://buy.stripe.com/cNifZg2KzcjZdg15O69Ve00";
 
 /** Where the "Get Pro" button points for the active rail. */
 export const PRO_PAGE_URL: string = LICENSE_RAIL === "polar" ? POLAR_PRO_PAGE_URL : STRIPE_PRO_PAGE_URL;
