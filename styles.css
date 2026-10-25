@@ -1,0 +1,67 @@
+/* Cardsmith: uses Obsidian CSS variables only, so it follows every theme. */
+
+.cardsmith-muted {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.cardsmith-review .modal-content {
+	max-height: 70vh;
+	overflow-y: auto;
+}
+
+.cardsmith-card-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-3);
+	margin: var(--size-4-3) 0;
+}
+
+.cardsmith-card {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	padding: var(--size-4-2) var(--size-4-3);
+	background: var(--background-secondary);
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-1);
+	transition: opacity 120ms ease;
+}
+
+.cardsmith-card.is-dropped {
+	opacity: 0.45;
+}
+
+.cardsmith-card-head {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+}
+
+.cardsmith-type {
+	font-size: var(--font-ui-smaller);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--text-accent);
+}
+
+.cardsmith-card textarea {
+	width: 100%;
+	resize: vertical;
+	font-family: var(--font-text);
+}
+
+.cardsmith-card .cardsmith-front {
+	font-weight: var(--font-semibold);
+}
+
+.cardsmith-pro-box {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	padding: var(--size-4-2) var(--size-4-4);
+	margin-bottom: var(--size-4-3);
+}
+
+.cardsmith-key-input {
+	width: 100%;
+}

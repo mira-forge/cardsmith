@@ -1,0 +1,7 @@
+# Not deployed. Deploying needs a Cloudflare account (free plan, no card) and `wrangler login`.
+name = "cardsmith-license"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+workers_dev = true
+# No KV, D1 or other storage bindings: the Worker stores nothing.
+# Secrets (wrangler secret put): ITCH_API_KEY, ITCH_GAME_ID, SIGNING_JWK

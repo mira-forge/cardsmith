@@ -1,0 +1,14 @@
+{
+  "name": "cardsmith-license-server",
+  "private": true,
+  "version": "0.1.0",
+  "description": "itch.io download-key check for Cardsmith Pro. Cloudflare Worker, stores nothing.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "keygen": "node scripts/keygen.mjs",
+    "deploy": "echo 'Not deployed yet: needs Mira OK, a Cloudflare account and wrangler login. Then: npx wrangler deploy' && exit 1"
+  }
+}
