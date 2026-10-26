@@ -31,3 +31,11 @@ export const LICENSE_PUBLIC_JWK: JsonWebKey = {
 
 export const FREE_MAX_CARDS = 10;
 export const PRO_MAX_CARDS = 50;
+
+/**
+ * Hosted generation limits per license (Pro). Must match LIMITS in the license service
+ * (cardsmith-license-stripe/src/hosted.ts): monthlyGens 300, hourlyGens 30. Used in user-facing copy only;
+ * the service enforces them.
+ */
+export const HOSTED_MONTHLY_GENS = 300;
+export const HOSTED_HOURLY_GENS = 30;

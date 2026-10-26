@@ -1,6 +1,6 @@
 import { App, Modal, Setting } from "obsidian";
 import { FREE_FOLDER_RUN_NOTES, PRO_FEATURES, type ProFeature } from "../core/features";
-import { PRO_PAGE_URL } from "../config";
+import { HOSTED_MONTHLY_GENS, PRO_PAGE_URL } from "../config";
 
 /** What the user was trying to do, said as an outcome. */
 const PITCH: Record<ProFeature, { title: string; body: string }> = {
@@ -23,6 +23,10 @@ const PITCH: Record<ProFeature, { title: string; body: string }> = {
 	customInstructions: {
 		title: "Tell the model how to write your cards",
 		body: "Pro adds your own instructions to every request, for example exam style, level or language.",
+	},
+	hostedAi: {
+		title: "Make cards with no API key",
+		body: `Pro includes hosted generation: pick "Hosted (Pro, no key needed)" as the model provider and Cardsmith makes the cards for you, up to ${HOSTED_MONTHLY_GENS} generations a month. Your own key and Ollama stay free and unlimited.`,
 	},
 	moreCards: {
 		title: "Make up to 50 cards from a note",

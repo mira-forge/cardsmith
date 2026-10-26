@@ -1,6 +1,7 @@
 import { App, PluginSettingTab, SecretComponent, Setting, type SettingDefinitionItem } from "obsidian";
 import type CardsmithPlugin from "./main";
 import { PRESETS, type ProviderKind } from "./ai/providers";
+import { HOSTED_COPY, HOSTED_LABEL, HOSTED_PRESET, usageText, type HostedUsage } from "./ai/hosted";
 import { PRO_FEATURES } from "./core/features";
 import { FREE_MAX_CARDS, PRO_MAX_CARDS, PRO_PAGE_URL } from "./config";
 import type { StoredLicense } from "./license/types";
@@ -9,7 +10,8 @@ import { FolderSuggestModal } from "./ui/folder-modal";
 
 export interface CardsmithSettings {
 	preset: string;
-	kind: ProviderKind;
+	/** "hosted" = Hosted (Pro, no key needed): the license service makes the cards. */
+	kind: ProviderKind | typeof HOSTED_PRESET;
 	baseUrl: string;
 	model: string;
 	/** Name of the entry in Obsidian's secret storage that holds the API key (not the key itself). */
@@ -30,6 +32,10 @@ export interface CardsmithSettings {
 	syncedFolders: string[];
 	/** Pro: per-note record (modified time, size, card state) so unchanged notes are not read again. */
 	syncIndex: SyncIndex;
+	/** Set once the one-line hosted-mode privacy notice has been shown. */
+	hostedNoticeShown: boolean;
+	/** Last hosted-generation count the service reported (display only; the service enforces limits). */
+	hostedUsage: HostedUsage | null;
 }
 
 export const DEFAULT_SETTINGS: CardsmithSettings = {
@@ -51,6 +57,8 @@ export const DEFAULT_SETTINGS: CardsmithSettings = {
 	freeFolderRunUsed: false,
 	syncedFolders: [],
 	syncIndex: {},
+	hostedNoticeShown: false,
+	hostedUsage: null,
 };
 
 /**
@@ -132,15 +140,27 @@ export class CardsmithSettingTab extends PluginSettingTab {
 		const save = () => this.plugin.saveSettings();
 		const cap = pro ? PRO_MAX_CARDS : FREE_MAX_CARDS;
 
+		const hosted = s.kind === HOSTED_PRESET;
 		const provider: Row[] = [
 			{
 				name: "Model provider",
-				desc: "Requests go directly from this device to the provider you pick. Cardsmith never sees your notes or keys.",
-				aliases: ["AI", "OpenAI", "Anthropic", "Ollama", "local model", "LLM"],
+				desc: hosted
+					? HOSTED_COPY.firstUse
+					: "With your own key or Ollama, requests go directly from this device to the provider you pick. Cardsmith never sees your notes or keys.",
+				aliases: ["AI", "OpenAI", "Anthropic", "Ollama", "local model", "LLM", "hosted", "no key"],
 				build: (st) =>
 					st.addDropdown((d) => {
 						for (const [id, p] of Object.entries(PRESETS)) d.addOption(id, p.label);
+						d.addOption(HOSTED_PRESET, HOSTED_LABEL);
 						d.setValue(s.preset).onChange(async (v) => {
+							if (v === HOSTED_PRESET) {
+								// The BYOK fields are kept, so switching back restores them.
+								s.preset = v;
+								s.kind = HOSTED_PRESET;
+								await save();
+								this.refresh();
+								return;
+							}
 							const p = PRESETS[v];
 							if (!p) return;
 							s.preset = v;
@@ -153,7 +173,27 @@ export class CardsmithSettingTab extends PluginSettingTab {
 					}),
 			},
 		];
-		if (s.kind !== "anthropic") {
+		if (hosted) {
+			provider.push({
+				name: "Hosted generations",
+				desc: pro ? usageText(s.hostedUsage) : HOSTED_COPY.needsPro,
+				aliases: ["hosted", "quota", "generations left", "no key"],
+				build: (st) =>
+					st.addButton((b) =>
+						b.setButtonText(pro ? "Check" : "See Pro").onClick(async () => {
+							if (!pro) {
+								this.plugin.showPro("hostedAi");
+								return;
+							}
+							b.setDisabled(true);
+							const text = await this.plugin.refreshHostedUsage();
+							b.setDisabled(false);
+							st.setDesc(text);
+						}),
+					),
+			});
+		}
+		if (!hosted && s.kind !== "anthropic") {
 			provider.push({
 				name: "Base URL",
 				desc: s.kind === "ollama" ? "Where Ollama is listening." : "OpenAI-compatible endpoint, ending in /v1 for most providers.",
@@ -167,7 +207,7 @@ export class CardsmithSettingTab extends PluginSettingTab {
 					),
 			});
 		}
-		provider.push({
+		if (!hosted) provider.push({
 			name: "Model",
 			aliases: ["model name"],
 			build: (st) =>
@@ -178,7 +218,7 @@ export class CardsmithSettingTab extends PluginSettingTab {
 					}),
 				),
 		});
-		if (s.kind !== "ollama") {
+		if (!hosted && s.kind !== "ollama") {
 			provider.push({
 				name: "API key",
 				desc: "Stored in Obsidian's secret storage on this device, not in your vault files.",
@@ -223,7 +263,7 @@ export class CardsmithSettingTab extends PluginSettingTab {
 			},
 			{
 				name: "Card language",
-				desc: "Leave empty to match each note's language.",
+				desc: hosted ? "Hosted mode always writes cards in each note's language." : "Leave empty to match each note's language.",
 				aliases: ["language", "translate"],
 				build: (st) =>
 					st.addText((t) =>
@@ -279,7 +319,7 @@ export class CardsmithSettingTab extends PluginSettingTab {
 		const proRows: Row[] = [
 			{
 				name: "Custom instructions",
-				desc: pro ? "Extra guidance for the model, for example exam style or level." : "Requires Pro.",
+				desc: pro ? (hosted ? "Extra guidance for the model. Used with your own key or Ollama, not in hosted mode." : "Extra guidance for the model, for example exam style or level.") : "Requires Pro.",
 				aliases: ["prompt", "instructions"],
 				build: (st) =>
 					st.addTextArea((t) => {

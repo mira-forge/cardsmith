@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased (branch hosted-ai, not released)
+
+- **Hosted generation (Pro): make cards with no API key.** Pick **Hosted (Pro, no key needed)** in Settings → Cardsmith → Model provider. The Cardsmith license service makes the cards through OpenRouter (Google, zero data retention required). Up to 300 generations a month and 30 an hour per license; Settings shows how many are left. When a limit is reached or hosted generation is paused, Cardsmith says so and points you to your own key or Ollama, which stay free and unlimited. Notes are cut to 24,000 characters. Custom instructions and the card language setting are not used in hosted mode.
+- First use shows a one-time notice saying where the note goes. Your own key and Ollama are unchanged and still go straight from your device to the provider.
+
 ## 0.1.6 (2026-10-26)
 
 - **Synced folders (Pro).** Pick folders once in Settings → Cardsmith → Synced folders. When Obsidian starts, Cardsmith counts the notes in them that changed since their cards were made or have no cards yet, and shows the count in the status bar ("7 notes have new content"). Select it, or run **Refresh notes with new content in synced folders**, to make cards for all of those notes and review them in one window. You can edit or untick cards, or untick a whole note. Nothing is saved until you select **Approve**, and **Cancel** saves nothing. **Check synced folders for notes with new content** checks again at any time.

@@ -12,7 +12,12 @@ export const requestLog: unknown[] = [];
 export const mockReply: { fn: ((req: any) => unknown) | null } = { fn: null };
 export async function requestUrl(req: unknown) {
 	requestLog.push(req);
-	if (mockReply.fn) { const json = mockReply.fn(req); return { status: 200, json, text: JSON.stringify(json) }; }
+	if (mockReply.fn) {
+		const out = mockReply.fn(req) as { __status?: number; json?: unknown } | null;
+		// `{ __status, json }` lets a test answer with a non-200 status (e.g. a hosted quota reply).
+		if (out && typeof out === "object" && typeof out.__status === "number") return { status: out.__status, json: out.json, text: JSON.stringify(out.json) };
+		return { status: 200, json: out, text: JSON.stringify(out) };
+	}
 	return { status: 599, json: null, text: "" };
 }
 

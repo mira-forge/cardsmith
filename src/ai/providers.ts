@@ -1,6 +1,8 @@
 /**
  * Bring-your-own-key model clients. Requests go straight from the user's device to
- * the provider they configured. Nothing is sent to Mira Forge.
+ * the provider they configured. Nothing is sent to Mira Forge on these paths.
+ * (The opt-in Pro "Hosted (Pro, no key needed)" mode is separate: see hosted.ts, which sends the
+ * note to the Mira Forge license service.)
  * The HTTP function is injected so the logic is testable without Obsidian.
  */
 

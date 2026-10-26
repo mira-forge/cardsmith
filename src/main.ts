@@ -1,7 +1,8 @@
 import { MarkdownView, Notice, Plugin, TFile, TFolder, normalizePath, requestUrl, type Editor } from "obsidian";
 import { CardsmithSettingTab, DEFAULT_SETTINGS, type CardsmithSettings } from "./settings";
-import { complete, type HttpFn, type ModelConfig } from "./ai/providers";
-import { buildBlock, findBlock, hashText, mergeBlock, parseCards, stripBlock, upsertBlock, type Card } from "./core/cards";
+import { complete, type HttpFn, type ModelConfig, type ProviderKind } from "./ai/providers";
+import { HOSTED_COPY, HOSTED_PRESET, HostedError, hostedGenerate, hostedText, hostedUsage, MAX_TITLE_CHARS, usageText, type HostedUsage } from "./ai/hosted";
+import { buildBlock, findBlock, hashText, mergeBlock, parseCards, stripBlock, upsertBlock, type Card, type CardType } from "./core/cards";
 import { buildMessages, MAX_INPUT_CHARS } from "./core/prompt";
 import { markdownUnder } from "./core/scope";
 import { classify, cleanFolders, MIN_NOTE_CHARS, needsRefresh, pendingText, scanNotes } from "./core/sync";
@@ -182,8 +183,64 @@ export default class CardsmithPlugin extends Plugin {
 
 	private modelConfig(): ModelConfig {
 		const s = this.settings;
-		const apiKey = s.kind === "ollama" || !s.apiKeySecret ? "" : (this.app.secretStorage.getSecret(s.apiKeySecret) ?? "");
-		return { kind: s.kind, baseUrl: s.baseUrl, model: s.model, apiKey, temperature: s.temperature };
+		const kind = s.kind as ProviderKind;
+		const apiKey = kind === "ollama" || !s.apiKeySecret ? "" : (this.app.secretStorage.getSecret(s.apiKeySecret) ?? "");
+		return { kind, baseUrl: s.baseUrl, model: s.model, apiKey, temperature: s.temperature };
+	}
+
+	/** True when "Hosted (Pro, no key needed)" is the model provider. */
+	usesHosted(): boolean {
+		return this.settings.kind === HOSTED_PRESET;
+	}
+
+	/** The Stripe-rail license key and this device's id, needed for hosted generation. */
+	private hostedIdentity(): { key: string; device: string } {
+		if (!this.license.isPro()) throw new HostedError("needs_pro", HOSTED_COPY.needsPro, true);
+		const l = this.settings.license;
+		if (!l || l.providerId !== "stripe" || !l.activationId) throw new HostedError("wrong_license", HOSTED_COPY.wrongLicense, true);
+		return { key: l.key, device: l.activationId };
+	}
+
+	private async saveHostedUsage(u: HostedUsage | undefined): Promise<void> {
+		if (!u) return;
+		this.settings.hostedUsage = u;
+		await this.saveSettings();
+	}
+
+	/** Settings button: ask the service how many hosted generations are left. Returns the text to show. */
+	async refreshHostedUsage(): Promise<string> {
+		try {
+			const id = this.hostedIdentity();
+			const r = await hostedUsage(obsidianHttp, STRIPE_LICENSE_SERVER_URL, id.key, id.device);
+			await this.saveHostedUsage(r.usage);
+			return r.available ? usageText(r.usage) : `${usageText(r.usage)} ${HOSTED_COPY.paused}`;
+		} catch (e) {
+			if (e instanceof HostedError) {
+				await this.saveHostedUsage(e.usage);
+				return e.message;
+			}
+			return HOSTED_COPY.network;
+		}
+	}
+
+	/** Hosted: the server builds the prompt and picks the model; only title, text, card count and types are sent. */
+	private async makeHostedCards(title: string, text: string, max: number, types: CardType[]): Promise<{ cards: Card[]; truncated: boolean }> {
+		const id = this.hostedIdentity();
+		if (!this.settings.hostedNoticeShown) {
+			new Notice(HOSTED_COPY.firstUse, 12000);
+			this.settings.hostedNoticeShown = true;
+			await this.saveSettings();
+		}
+		const cut = hostedText(text);
+		try {
+			const r = await hostedGenerate(obsidianHttp, STRIPE_LICENSE_SERVER_URL, { ...id, title: title.slice(0, MAX_TITLE_CHARS), text: cut.text, cards: max, types });
+			await this.saveHostedUsage(r.usage);
+			if (r.usage && r.usage.remaining <= 10) new Notice(usageText(r.usage), 6000);
+			return { cards: parseCards(r.text, types).slice(0, max), truncated: cut.truncated };
+		} catch (e) {
+			if (e instanceof HostedError) await this.saveHostedUsage(e.usage);
+			throw e;
+		}
 	}
 
 	/** Ask the model for cards for one piece of text. `truncated` is set when only the first part of a long note was sent. */
@@ -191,6 +248,7 @@ export default class CardsmithPlugin extends Plugin {
 		const pro = this.license.isPro();
 		const types = allowedTypes(pro, { reversed: this.settings.useReversed, cloze: this.settings.useCloze });
 		const max = cardCap(pro, this.settings.maxCards);
+		if (this.usesHosted()) return this.makeHostedCards(title, text, max, types);
 		const { system, user, truncated } = buildMessages(title, text, {
 			maxCards: max,
 			types,
@@ -219,7 +277,8 @@ export default class CardsmithPlugin extends Plugin {
 		} catch (e) {
 			notice.hide();
 			this.busy = false;
-			new Notice(e instanceof Error ? e.message : "Card generation failed.", 8000);
+			if (e instanceof HostedError && e.code === "needs_pro") this.showPro("hostedAi");
+			else new Notice(e instanceof Error ? e.message : "Card generation failed.", 8000);
 			return;
 		}
 		notice.hide();
@@ -316,8 +375,8 @@ export default class CardsmithPlugin extends Plugin {
 				notesDone++;
 			} catch (e) {
 				failed.push(file.basename);
-				if (e instanceof Error && /API key|rate limiting|reach/.test(e.message)) {
-					new Notice(e.message, 8000);
+				if (e instanceof HostedError ? e.stop : e instanceof Error && /API key|rate limiting|reach/.test(e.message)) {
+					new Notice((e as Error).message, 8000);
 					break;
 				}
 			}
@@ -483,8 +542,8 @@ export default class CardsmithPlugin extends Plugin {
 				});
 			} catch (e) {
 				failed.push(file.basename);
-				if (e instanceof Error && /API key|rate limiting|reach/.test(e.message)) {
-					new Notice(e.message, 8000);
+				if (e instanceof HostedError ? e.stop : e instanceof Error && /API key|rate limiting|reach/.test(e.message)) {
+					new Notice((e as Error).message, 8000);
 					break;
 				}
 			}

@@ -1,5 +1,5 @@
 import type { CardType } from "./cards";
-import { FREE_MAX_CARDS, PRO_MAX_CARDS } from "../config";
+import { FREE_MAX_CARDS, HOSTED_MONTHLY_GENS, PRO_MAX_CARDS } from "../config";
 
 /** Single source of truth for the free/Pro split (also used by the README table test). */
 export const PRO_FEATURES = {
@@ -9,6 +9,7 @@ export const PRO_FEATURES = {
 	bulkExport: "Export a folder or the whole vault to Anki, with decks from folders",
 	customInstructions: "Custom instructions for the model",
 	moreCards: `Up to ${PRO_MAX_CARDS} cards per note (free: ${FREE_MAX_CARDS})`,
+	hostedAi: `Hosted AI: make cards with no API key or local model (${HOSTED_MONTHLY_GENS} generations a month)`,
 } as const;
 
 export type ProFeature = keyof typeof PRO_FEATURES;
