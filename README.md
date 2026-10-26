@@ -4,7 +4,7 @@ Turn your notes into spaced-repetition flashcards with your own AI key or a loca
 
 Cardsmith writes cards in the format used by the [Spaced Repetition](https://github.com/st3v3nmw/obsidian-spaced-repetition) plugin, so they work with the review tools you already use. It also exports any Spaced Repetition card, including ones you wrote by hand, to an Anki import file, with no AI and no network.
 
-**Not listed in Obsidian's in-app browser yet.** Cardsmith is listed at https://community.obsidian.md/plugins/cardsmith, but it does not appear under Settings → Community plugins → Browse yet. Until it does, install it manually (see [Install](#install)).
+**Install from Obsidian:** Settings → Community plugins → Browse, search for “Cardsmith”, select **Install**, then **Enable**. Listing: https://community.obsidian.md/plugins/cardsmith
 
 ![Review generated cards before they are saved](docs/smoke-review-modal.png)
 
@@ -43,7 +43,13 @@ If your subscription ends, Pro features switch off and your existing cards stay 
 
 ## Install
 
-Cardsmith is not in Obsidian's in-app Community plugins browser yet, so install it one of these two ways:
+Cardsmith is in Obsidian's in-app Community plugins browser:
+
+1. In Obsidian, open **Settings → Community plugins** (turn on community plugins if asked).
+2. Select **Browse**, search for **Cardsmith**, and select **Install**.
+3. Select **Enable**.
+
+You can also install it manually, one of these two ways:
 
 - **From the GitHub release:** download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/mira-forge/cardsmith/releases/latest). Put them in a new folder `<your vault>/.obsidian/plugins/cardsmith/`. Then, in Obsidian, open **Settings → Community plugins**, select the reload button next to *Installed plugins*, and enable **Cardsmith**.
 - **With BRAT:** install the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin, run BRAT's **Add a beta plugin for testing** command, enter `mira-forge/cardsmith`, then enable **Cardsmith** under **Settings → Community plugins**.
