@@ -12,6 +12,10 @@ const PITCH: Record<ProFeature, { title: string; body: string }> = {
 		title: "Refresh cards for notes you've changed",
 		body: "Pro re-runs only the notes that changed since their cards were made. Cards that keep their question keep their Spaced Repetition review history.",
 	},
+	syncFolders: {
+		title: "Keep this folder in sync",
+		body: "Pick folders once. When Obsidian starts, Cardsmith counts the notes in them that changed since their cards were made or have no cards yet, and refreshes them in one batch you review. Nothing is saved until you approve it, and cards that keep their question keep their Spaced Repetition review history.",
+	},
 	bulkExport: {
 		title: "Export this folder to Anki",
 		body: "Pro writes one Anki import file for a folder or the whole vault, with a deck for each folder. It runs offline.",

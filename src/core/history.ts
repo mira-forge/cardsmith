@@ -29,6 +29,8 @@ interface Entry {
 	last: number;
 	full: string; // normalized front + back
 	front: string; // normalized front
+	/** The card's question as written (cloze: the sentence), for showing to the user. */
+	question: string;
 	history: History | null;
 	/** Last line of the card's history (or of the card when it has none). */
 	end: number;
@@ -77,6 +79,7 @@ function scan(lines: string[]): Entry[] {
 			last: idx[idx.length - 1]!,
 			full: norm(`${c.front}\n${c.back}`),
 			front: norm(c.front),
+			question: c.front.replace(/\u200b/g, "").replace(/\s+/g, " ").trim(),
 			history: sameLine || blockId ? { lines: [], sameLine, blockId } : null,
 			end: idx[idx.length - 1]!,
 		};
@@ -142,6 +145,11 @@ export interface CarryResult {
 	dropped: number;
 	/** Reviewed cards that are not in the new block but were kept at its end (`keepUnmatched`). */
 	preserved: number;
+	/**
+	 * Questions of the reviewed cards that are not in the new block, in note order: the cards
+	 * counted in `dropped` (removed) or in `preserved` (kept at the end), whichever applies.
+	 */
+	unmatched: string[];
 }
 
 /**
@@ -151,11 +159,11 @@ export interface CarryResult {
  * history, to the end of the new block instead of being removed.
  */
 export function carryHistory(oldBlock: string | null, newBlock: string, keepUnmatched = false): CarryResult {
-	if (!oldBlock) return { block: newBlock, kept: 0, dropped: 0, preserved: 0 };
+	if (!oldBlock) return { block: newBlock, kept: 0, dropped: 0, preserved: 0, unmatched: [] };
 	// cards with a schedule, or with a block id that other notes may link to
 	const oldLines = oldBlock.replace(/\r\n?/g, "\n").split("\n");
 	const oldEntries = scan(oldLines).filter((e) => e.history !== null);
-	if (!oldEntries.length) return { block: newBlock, kept: 0, dropped: 0, preserved: 0 };
+	if (!oldEntries.length) return { block: newBlock, kept: 0, dropped: 0, preserved: 0, unmatched: [] };
 	const lines = newBlock.split("\n");
 	const fresh = scan(lines);
 	const used = new Set<Entry>();
@@ -189,6 +197,7 @@ export function carryHistory(oldBlock: string | null, newBlock: string, keepUnma
 	}
 	const kept = [...matches.values()].filter((o) => hasHistory(o.history)).length;
 	const unmatched = oldEntries.filter((o) => !used.has(o) && hasHistory(o.history));
+	const questions = unmatched.map((o) => o.question);
 	if (keepUnmatched && unmatched.length) {
 		let at = lines.length;
 		for (let i = lines.length - 1; i >= 0; i--) {
@@ -200,7 +209,7 @@ export function carryHistory(oldBlock: string | null, newBlock: string, keepUnma
 		const extra: string[] = [];
 		for (const o of unmatched) extra.push("", ...oldLines.slice(o.first, o.end + 1));
 		lines.splice(at, 0, ...extra);
-		return { block: lines.join("\n"), kept, dropped: 0, preserved: unmatched.length };
+		return { block: lines.join("\n"), kept, dropped: 0, preserved: unmatched.length, unmatched: questions };
 	}
-	return { block: lines.join("\n"), kept, dropped: unmatched.length, preserved: 0 };
+	return { block: lines.join("\n"), kept, dropped: unmatched.length, preserved: 0, unmatched: questions };
 }

@@ -65,3 +65,23 @@
 .cardsmith-key-input {
 	width: 100%;
 }
+
+.cardsmith-sync-note {
+	border-top: 1px solid var(--background-modifier-border);
+	padding-top: var(--size-4-3);
+	margin-top: var(--size-4-3);
+}
+
+.cardsmith-sync-note.is-dropped .cardsmith-card-list {
+	opacity: 0.45;
+}
+
+.cardsmith-question-list {
+	margin-top: 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.cardsmith-sync-status {
+	cursor: pointer;
+}

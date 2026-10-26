@@ -4,6 +4,7 @@ import { complete, type HttpFn, type ModelConfig } from "./ai/providers";
 import { buildBlock, findBlock, hashText, mergeBlock, parseCards, stripBlock, upsertBlock, type Card } from "./core/cards";
 import { buildMessages, MAX_INPUT_CHARS } from "./core/prompt";
 import { markdownUnder } from "./core/scope";
+import { classify, cleanFolders, MIN_NOTE_CHARS, needsRefresh, pendingText, scanNotes } from "./core/sync";
 import { allowedTypes, cardCap, FREE_FOLDER_RUN_NOTES, plural, type ProFeature } from "./core/features";
 import { deckFromPath, parseSrCards, toAnkiTsv, type ExportCard } from "./core/anki";
 import { LicenseManager } from "./license/manager";
@@ -12,6 +13,7 @@ import { StripeLicenseProvider } from "./license/stripe-provider";
 import { LicenseError } from "./license/types";
 import { ITCH_LICENSE_SERVER_URL, LICENSE_PUBLIC_JWK, STRIPE_LICENSE_SERVER_URL } from "./config";
 import { ReviewModal } from "./ui/review-modal";
+import { SyncReviewModal, type SyncApproval, type SyncItem } from "./ui/sync-review-modal";
 import { FolderSuggestModal } from "./ui/folder-modal";
 import { ProModal } from "./ui/pro-modal";
 import { KeyModal } from "./ui/key-modal";
@@ -44,6 +46,11 @@ export default class CardsmithPlugin extends Plugin {
 	license!: LicenseManager;
 	private busy = false;
 	refreshSettingTab?: () => void;
+	/** Status bar count of synced-folder notes with new content (hidden when there are none). */
+	private statusEl: HTMLElement | null = null;
+	/** Paths found by the last synced-folder check. */
+	syncPending: string[] = [];
+	private scanning: Promise<void> | null = null;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -64,6 +71,13 @@ export default class CardsmithPlugin extends Plugin {
 		this.registerInterval(window.setInterval(() => void this.license.revalidate(), 6 * 60 * 60 * 1000));
 
 		this.addSettingTab(new CardsmithSettingTab(this.app, this));
+		this.statusEl = this.addStatusBarItem();
+		this.statusEl.addClass("cardsmith-sync-status");
+		this.statusEl.setAttr("aria-label", "Refresh these notes in one reviewed batch");
+		this.statusEl.toggle(false);
+		this.statusEl.addEventListener("click", () => void this.refreshSynced());
+		// Synced folders (Pro): one cheap check once the vault is loaded. Unchanged notes are not read.
+		this.app.workspace.onLayoutReady(() => void this.checkSynced(false));
 		this.addRibbonIcon("layers", "Generate flashcards from this note", () => {
 			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 			if (view?.file) void this.generateForEditor(view.editor, view.file);
@@ -109,6 +123,16 @@ export default class CardsmithPlugin extends Plugin {
 				),
 		});
 		this.addCommand({
+			id: "check-synced-folders",
+			name: "Check synced folders for notes with new content",
+			callback: () => this.requirePro("syncFolders", () => void this.checkSynced(true), this.freeSyncRun()),
+		});
+		this.addCommand({
+			id: "refresh-synced-folders",
+			name: "Refresh notes with new content in synced folders",
+			callback: () => this.requirePro("syncFolders", () => void this.refreshSynced(), this.freeSyncRun()),
+		});
+		this.addCommand({
 			id: "activate-pro",
 			name: "Activate license key",
 			callback: () => new KeyModal(this.app, (k) => this.activateLicense(k)).open(),
@@ -117,6 +141,9 @@ export default class CardsmithPlugin extends Plugin {
 
 	async loadSettings(): Promise<void> {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, (await this.loadData()) as Partial<CardsmithSettings> | null);
+		// own copies, so the defaults are never mutated
+		this.settings.syncedFolders = cleanFolders(Array.isArray(this.settings.syncedFolders) ? this.settings.syncedFolders : []);
+		this.settings.syncIndex = { ...(this.settings.syncIndex ?? {}) };
 	}
 
 	async saveSettings(): Promise<void> {
@@ -139,7 +166,18 @@ export default class CardsmithPlugin extends Plugin {
 
 	private requirePro(feature: ProFeature, run: () => void, tryFree?: () => void): void {
 		if (this.license.isPro()) run();
-		else new ProModal(this.app, feature, this.license.salesOpen(), () => new KeyModal(this.app, (k) => this.activateLicense(k)).open(), tryFree).open();
+		else this.showPro(feature, tryFree);
+	}
+
+	/** The value-first Pro screen for `feature`. */
+	showPro(feature: ProFeature, tryFree?: () => void): void {
+		new ProModal(this.app, feature, this.license.salesOpen(), () => new KeyModal(this.app, (k) => this.activateLicense(k)).open(), tryFree).open();
+	}
+
+	/** The free taste of synced folders: one reviewed refresh of up to 5 notes in a folder, once per vault (shared with the free folder run). */
+	freeSyncRun(): (() => void) | undefined {
+		if (this.settings.freeFolderRunUsed) return undefined;
+		return () => new FolderSuggestModal(this.app, (f) => void this.refreshSynced({ folder: f, limit: FREE_FOLDER_RUN_NOTES })).open();
 	}
 
 	private modelConfig(): ModelConfig {
@@ -216,7 +254,9 @@ export default class CardsmithPlugin extends Plugin {
 			const old = preserved ? ` ${preservedText(preserved)}` : "";
 			new Notice(`Added ${plural(chosen.length, "card")}.${history}${lost}${old}`, dropped || preserved ? 10000 : 5000);
 		};
-		if (this.settings.reviewBeforeInsert) new ReviewModal(this.app, cards, file.basename, write, historyCount(full)).open();
+		// questions of reviewed cards that inserting the chosen cards would remove (same merge as write())
+		const removedFor = (chosen: Card[]) => mergeBlock(editor.getValue(), buildBlock(chosen, this.settings.deckTag, "00000000"), keepReviewed).unmatched;
+		if (this.settings.reviewBeforeInsert) new ReviewModal(this.app, cards, file.basename, write, historyCount(full), removedFor).open();
 		else write(cards);
 	}
 
@@ -253,7 +293,7 @@ export default class CardsmithPlugin extends Plugin {
 			const content = await this.app.vault.cachedRead(file);
 			const body = stripBlock(content);
 			const hash = hashText(body);
-			if (findBlock(content)?.hash === hash || body.trim().length < 80) {
+			if (findBlock(content)?.hash === hash || body.trim().length < MIN_NOTE_CHARS) {
 				skipped++;
 				continue;
 			}
@@ -298,6 +338,208 @@ export default class CardsmithPlugin extends Plugin {
 				15000,
 			);
 		}
+	}
+
+	/** Synced folders that still exist. The vault root is "/". A renamed or deleted folder is skipped. */
+	private syncedFolderObjects(): TFolder[] {
+		const out: TFolder[] = [];
+		for (const p of this.settings.syncedFolders) {
+			const f = p === "/" ? this.app.vault.getRoot() : this.app.vault.getFolderByPath(p);
+			if (f) out.push(f);
+		}
+		return out;
+	}
+
+	/** Markdown notes in the synced folders only (each folder walked on its own, duplicates removed). */
+	syncedNotes(): TFile[] {
+		const seen = new Map<string, TFile>();
+		for (const folder of this.syncedFolderObjects()) for (const f of this.markdownIn(folder)) seen.set(f.path, f);
+		return [...seen.values()].sort((a, b) => a.path.localeCompare(b.path));
+	}
+
+	async addSyncedFolder(path: string): Promise<void> {
+		this.settings.syncedFolders = cleanFolders([...this.settings.syncedFolders, path]);
+		await this.saveSettings();
+		await this.checkSynced(false);
+	}
+
+	async removeSyncedFolder(path: string): Promise<void> {
+		this.settings.syncedFolders = this.settings.syncedFolders.filter((p) => p !== path);
+		await this.saveSettings();
+		await this.checkSynced(false);
+	}
+
+	private showCount(): void {
+		if (!this.statusEl) return;
+		const n = this.syncPending.length;
+		this.statusEl.setText(n ? pendingText(n) : "");
+		this.statusEl.toggle(n > 0);
+	}
+
+	/**
+	 * Pro: count the notes in the synced folders that changed since their cards were made or have no cards
+	 * yet. A note is read only if its modified time or size changed since it was last checked; the record is
+	 * kept in data.json. Free (or no synced folders): nothing is listed or read, and the count is hidden.
+	 */
+	checkSynced(announce: boolean): Promise<void> {
+		if (!this.scanning) {
+			this.scanning = this.runCheck(announce).finally(() => (this.scanning = null));
+			return this.scanning;
+		}
+		return this.scanning.then(() => (announce ? this.announce() : undefined));
+	}
+
+	private announce(): void {
+		const n = this.syncPending.length;
+		if (!this.settings.syncedFolders.length) new Notice("Add a synced folder first, in this plugin's settings.");
+		else if (n) new Notice(`${pendingText(n)}. Select the count in the status bar, or run "Refresh notes with new content in synced folders", to review new cards for them.`, 8000);
+		else new Notice("Every note in your synced folders has up-to-date cards.");
+	}
+
+	private async runCheck(announce: boolean): Promise<void> {
+		if (!this.license.isPro() || !this.settings.syncedFolders.length) {
+			this.syncPending = [];
+			this.showCount();
+			if (announce) this.announce();
+			return;
+		}
+		const files = this.syncedNotes();
+		const byPath = new Map(files.map((f) => [f.path, f]));
+		const r = await scanNotes(
+			files.map((f) => ({ path: f.path, stat: f.stat })),
+			this.settings.syncIndex,
+			(p) => this.app.vault.cachedRead(byPath.get(p)!),
+		);
+		this.syncPending = r.pending;
+		if (r.dirty) {
+			this.settings.syncIndex = r.index;
+			await this.saveSettings();
+		}
+		this.showCount();
+		if (announce) this.announce();
+	}
+
+	/**
+	 * Make new cards for the synced-folder notes with new content and show them in one review window.
+	 * Nothing is written until the user approves. With `folder` and `limit` (the free taste): only that
+	 * folder, at most `limit` notes, once per vault.
+	 */
+	async refreshSynced(opts: { folder?: TFolder; limit?: number } = {}): Promise<void> {
+		if (this.busy) return;
+		const free = opts.limit !== undefined;
+		let paths: string[];
+		if (free) {
+			if (this.settings.freeFolderRunUsed || !opts.folder) return;
+			const files = this.markdownIn(opts.folder);
+			const byPath = new Map(files.map((f) => [f.path, f]));
+			const r = await scanNotes(files.map((f) => ({ path: f.path, stat: f.stat })), {}, (p) => this.app.vault.cachedRead(byPath.get(p)!));
+			paths = r.pending.slice(0, opts.limit);
+		} else {
+			if (!this.license.isPro()) return;
+			if (!this.settings.syncedFolders.length) {
+				new Notice("Add a synced folder first, in this plugin's settings.");
+				return;
+			}
+			await this.checkSynced(false);
+			paths = [...this.syncPending];
+		}
+		if (!paths.length) {
+			new Notice(free ? "Every note in that folder already has up-to-date cards, or is too short." : "Every note in your synced folders has up-to-date cards.");
+			return;
+		}
+		this.busy = true;
+		const notice = new Notice(`Cardsmith: 0 of ${paths.length} notes`, 0);
+		const items: (SyncItem & { hash: string })[] = [];
+		const failed: string[] = [];
+		let empty = 0;
+		let cut = 0;
+		for (let i = 0; i < paths.length; i++) {
+			const file = this.app.vault.getFileByPath(paths[i]!);
+			if (!file) continue;
+			notice.setMessage(`Cardsmith: ${i + 1} of ${paths.length} notes (${file.basename})`);
+			const content = await this.app.vault.cachedRead(file);
+			const state = classify(content);
+			if (!needsRefresh(state)) continue;
+			const body = stripBlock(content);
+			const hash = hashText(body);
+			try {
+				const { cards, truncated } = await this.makeCards(file.basename, body);
+				if (truncated) cut++;
+				if (!cards.length) {
+					empty++;
+					continue;
+				}
+				items.push({
+					path: file.path,
+					name: file.basename,
+					reason: state === "new" ? "new" : "changed",
+					cards,
+					hash,
+					// same merge as the write below (0.1.5 logic): reviewed cards are never removed in a refresh
+					preview: (chosen) => {
+						const r = mergeBlock(content, buildBlock(chosen, this.settings.deckTag, hash), true);
+						return { kept: r.kept, stays: r.unmatched };
+					},
+				});
+			} catch (e) {
+				failed.push(file.basename);
+				if (e instanceof Error && /API key|rate limiting|reach/.test(e.message)) {
+					new Notice(e.message, 8000);
+					break;
+				}
+			}
+		}
+		notice.hide();
+		this.busy = false;
+		const lines: string[] = [];
+		if (failed.length) lines.push(`${plural(failed.length, "note")} failed and ${failed.length === 1 ? "is" : "are"} not listed: ${failed.slice(0, 3).join(", ")}${failed.length > 3 ? "…" : ""}.`);
+		if (empty) lines.push(`The model returned no usable cards for ${plural(empty, "note")}.`);
+		if (cut) lines.push(`${plural(cut, "note")} ${cut === 1 ? "was" : "were"} longer than ${MAX_INPUT_CHARS.toLocaleString("en-US")} characters; only the first ${MAX_INPUT_CHARS.toLocaleString("en-US")} were used.`);
+		if (!items.length) {
+			new Notice(`Nothing to review.${lines.length ? " " + lines.join(" ") : ""}`, 8000);
+			return;
+		}
+		new SyncReviewModal(
+			this.app,
+			items,
+			(approved) => this.applySync(approved as (SyncApproval & { item: SyncItem & { hash: string } })[], free),
+			() => new Notice("Nothing was saved."),
+			lines,
+		).open();
+	}
+
+	/** Write the approved notes, with the same merge as folder runs: review history kept, reviewed cards never removed. */
+	private async applySync(approved: (SyncApproval & { item: SyncItem & { hash: string } })[], free: boolean): Promise<void> {
+		let notes = 0;
+		let cards = 0;
+		let kept = 0;
+		let preserved = 0;
+		for (const { item, cards: chosen } of approved) {
+			const file = this.app.vault.getFileByPath(item.path);
+			if (!file) continue;
+			// the hash is of the text the cards were made from, so later edits still show as new content
+			const fresh = buildBlock(chosen, this.settings.deckTag, item.hash);
+			await this.app.vault.process(file, (data) => {
+				const r = mergeBlock(data, fresh, true);
+				kept += r.kept;
+				preserved += r.preserved;
+				return upsertBlock(data, fresh, true);
+			});
+			notes++;
+			cards += chosen.length;
+		}
+		const hist = kept ? ` Kept review history for ${plural(kept, "card")}.` : "";
+		const old = preserved ? ` ${preservedText(preserved)}` : "";
+		new Notice(`Refreshed ${plural(notes, "note")} with ${plural(cards, "card")}.${hist}${old}`, preserved ? 10000 : 6000);
+		if (free && notes > 0) {
+			this.settings.freeFolderRunUsed = true;
+			await this.saveSettings();
+			new Notice(
+				"That was your free folder run. With a license, pick folders once: Cardsmith counts the notes with new content when Obsidian starts, and you refresh them in one reviewed batch. It costs $3/month, tax included.",
+				15000,
+			);
+		}
+		await this.checkSynced(false);
 	}
 
 	/** Offline: collect Spaced Repetition-format cards and write an Anki import file into the vault. */

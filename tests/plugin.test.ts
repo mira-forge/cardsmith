@@ -22,7 +22,7 @@ describe("plugin with mocked Obsidian", () => {
 		const p = new CardsmithPlugin(app as never, {} as never);
 		await p.onload();
 		const ids = (p as unknown as { commands: { id: string; hotkeys?: unknown }[] }).commands.map((c) => c.id);
-		expect(ids).toEqual(["generate-note", "export-note-anki", "generate-folder", "export-folder-anki", "activate-pro"]);
+		expect(ids).toEqual(["generate-note", "export-note-anki", "generate-folder", "export-folder-anki", "check-synced-folders", "refresh-synced-folders", "activate-pro"]);
 		expect(ids.some((i) => i.includes("cardsmith"))).toBe(false);
 		expect(requestLog).toHaveLength(0);
 		expect(p.license.isPro()).toBe(false);

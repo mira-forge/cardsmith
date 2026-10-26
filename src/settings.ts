@@ -4,6 +4,8 @@ import { PRESETS, type ProviderKind } from "./ai/providers";
 import { PRO_FEATURES } from "./core/features";
 import { FREE_MAX_CARDS, PRO_MAX_CARDS, PRO_PAGE_URL } from "./config";
 import type { StoredLicense } from "./license/types";
+import type { SyncIndex } from "./core/sync";
+import { FolderSuggestModal } from "./ui/folder-modal";
 
 export interface CardsmithSettings {
 	preset: string;
@@ -24,6 +26,10 @@ export interface CardsmithSettings {
 	license: StoredLicense | null;
 	/** Set once the one free folder run (up to 5 notes) has been used in this vault. */
 	freeFolderRunUsed: boolean;
+	/** Pro: folders Cardsmith keeps in sync ("/" is the whole vault). */
+	syncedFolders: string[];
+	/** Pro: per-note record (modified time, size, card state) so unchanged notes are not read again. */
+	syncIndex: SyncIndex;
 }
 
 export const DEFAULT_SETTINGS: CardsmithSettings = {
@@ -43,6 +49,8 @@ export const DEFAULT_SETTINGS: CardsmithSettings = {
 	exportFolder: "Cardsmith exports",
 	license: null,
 	freeFolderRunUsed: false,
+	syncedFolders: [],
+	syncIndex: {},
 };
 
 /**
@@ -283,6 +291,45 @@ export class CardsmithSettingTab extends PluginSettingTab {
 					}),
 			},
 		];
+
+		proRows.push({
+			name: "Synced folders",
+			desc: pro
+				? s.syncedFolders.length
+					? "When Obsidian starts, Cardsmith counts the notes in these folders that changed since their cards were made or have no cards yet. Select the count in the status bar to review new cards for them. Nothing is saved until you approve it."
+					: "Pick folders once. When Obsidian starts, Cardsmith counts the notes in them that changed since their cards were made or have no cards yet, and you refresh them in one reviewed batch."
+				: "Requires Pro. Pick folders once; Cardsmith counts the notes in them with new content and refreshes them in one batch you review.",
+			aliases: ["sync", "keep in sync", "changed notes", "refresh", "folder"],
+			build: (st) =>
+				st.addButton((b) =>
+					b.setButtonText(pro ? "Add folder" : "See Pro").onClick(() => {
+						if (!pro) {
+							this.plugin.showPro("syncFolders", this.plugin.freeSyncRun());
+							return;
+						}
+						new FolderSuggestModal(this.app, (f) => {
+							void this.plugin.addSyncedFolder(f.isRoot() ? "/" : f.path).then(() => this.refresh());
+						}).open();
+					}),
+				),
+		});
+		for (const path of s.syncedFolders) {
+			proRows.push({
+				name: path === "/" ? "/ (whole vault)" : path,
+				desc:
+					path !== "/" && !this.app.vault.getFolderByPath(path)
+						? "Folder not found. It may have been renamed or deleted: remove it here and add it again."
+						: pro
+							? "Synced folder."
+							: "Synced folder, paused without Pro.",
+				build: (st) =>
+					st.addButton((b) =>
+						b.setButtonText("Remove").onClick(() => {
+							void this.plugin.removeSyncedFolder(path).then(() => this.refresh());
+						}),
+					),
+			});
+		}
 
 		return [
 			{ rows: provider },

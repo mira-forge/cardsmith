@@ -5,6 +5,7 @@ import { FREE_MAX_CARDS, PRO_MAX_CARDS } from "../config";
 export const PRO_FEATURES = {
 	batchFolder: "Generate cards for a whole folder in one run",
 	refreshChanged: "Refresh only the notes that changed since their cards were made",
+	syncFolders: "Synced folders: see which notes have new content and refresh them in one reviewed batch",
 	bulkExport: "Export a folder or the whole vault to Anki, with decks from folders",
 	customInstructions: "Custom instructions for the model",
 	moreCards: `Up to ${PRO_MAX_CARDS} cards per note (free: ${FREE_MAX_CARDS})`,

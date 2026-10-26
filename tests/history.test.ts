@@ -112,7 +112,7 @@ describe("review history survives a rewrite (fix for 0.1.4 data loss)", () => {
 
 	it("is a no-op for notes without a block or without history, and leaves text outside the block alone", () => {
 		const block = buildBlock([basic("Q", "A")], "#flashcards", "l");
-		expect(carryHistory(null, block)).toEqual({ block, kept: 0, dropped: 0, preserved: 0 });
+		expect(carryHistory(null, block)).toEqual({ block, kept: 0, dropped: 0, preserved: 0, unmatched: [] });
 		const plain = reviewedNote("Q::A");
 		expect(mergeBlock(plain, block).block).toBe(block);
 		const outside = `Intro ${SR1}\n\n` + reviewedNote(`Q::A\n${SR2}`);
