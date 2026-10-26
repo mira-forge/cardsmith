@@ -4,7 +4,7 @@
 
 - **Repository cleanup.** The unused itch.io license-server code was removed from this repository; the license services live in a separate private repository. The plugin itself already used only Obsidian's `requestUrl` for network calls, so nothing changes for you.
 - **Author link** now points to https://github.com/mira-forge.
-- Install line added to the README: Settings → Community plugins → Browse → Cardsmith.
+- README: manual install steps (GitHub release files or BRAT), since Cardsmith is listed at community.obsidian.md but not yet in Obsidian's in-app plugin browser.
 - No changes to features, Pro, pricing, the license service or network use.
 
 ## 0.1.2 (2026-10-26)

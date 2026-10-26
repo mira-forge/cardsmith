@@ -4,7 +4,7 @@ Turn your notes into spaced-repetition flashcards with your own AI key or a loca
 
 Cardsmith writes cards in the format used by the [Spaced Repetition](https://github.com/st3v3nmw/obsidian-spaced-repetition) plugin, so they work with the review tools you already use. It also exports any Spaced Repetition card, including ones you wrote by hand, to an Anki import file, with no AI and no network.
 
-**Install from Obsidian:** Settings → Community plugins → Browse → Cardsmith. Listing: https://community.obsidian.md/plugins/cardsmith
+**Not listed in Obsidian's in-app browser yet.** Cardsmith is listed at https://community.obsidian.md/plugins/cardsmith, but it does not appear under Settings → Community plugins → Browse yet. Until it does, install it manually (see [Install](#install)).
 
 ![Review generated cards before they are saved](docs/smoke-review-modal.png)
 
@@ -39,9 +39,18 @@ Cardsmith writes cards in the format used by the [Spaced Repetition](https://git
 
 If your subscription ends, Pro features switch off and your existing cards stay exactly where they are. If you are offline, Pro keeps working for 7 days after the last successful license check.
 
+## Install
+
+Cardsmith is not in Obsidian's in-app Community plugins browser yet, so install it one of these two ways:
+
+- **From the GitHub release:** download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/mira-forge/cardsmith/releases/latest). Put them in a new folder `<your vault>/.obsidian/plugins/cardsmith/`. Then, in Obsidian, open **Settings → Community plugins**, select the reload button next to *Installed plugins*, and enable **Cardsmith**.
+- **With BRAT:** install the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin, run BRAT's **Add a beta plugin for testing** command, enter `mira-forge/cardsmith`, then enable **Cardsmith** under **Settings → Community plugins**.
+
+Every release is built by GitHub Actions with a signed build provenance attestation.
+
 ## How to use
 
-1. Install and enable Cardsmith (Settings → Community plugins → Browse → Cardsmith). In **Settings → Cardsmith**, choose a model provider.
+1. Install and enable Cardsmith (see [Install](#install)). In **Settings → Cardsmith**, choose a model provider.
    - **Ollama (local, free):** install [Ollama](https://ollama.com), run `ollama pull llama3.1`, and keep the base URL `http://localhost:11434`. Nothing leaves your computer.
    - **OpenAI, Anthropic or OpenRouter:** pick the provider and select **Link…** next to *API key* to store your key in Obsidian's keychain.
 2. Open a note (or select part of it) and run **Cardsmith: Generate flashcards from this note or selection** from the command palette, or select the layers icon in the ribbon.
