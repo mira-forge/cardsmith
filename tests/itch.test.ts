@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeItchKey, ServerLicenseProvider } from "../src/license/server-provider";
-import { PolarLicenseProvider } from "../src/license/polar-provider";
+import { StripeLicenseProvider } from "../src/license/stripe-provider";
 import { LicenseManager } from "../src/license/manager";
 import { verifyToken, importPublicKey } from "../src/license/token";
 import type { HttpRequest, HttpResponse } from "../src/ai/providers";
@@ -66,18 +66,18 @@ describe("ServerLicenseProvider (itch, secondary)", () => {
 		reply = { status: 429, json: {}, text: "" };
 		await expect(p.activate(ITCH_KEY)).rejects.toMatchObject({ kind: "rate_limited" });
 	});
-	it("Polar is tried first; itch-shaped keys go to itch", async () => {
+	it("itch-shaped keys go to itch, not to the Stripe license service", async () => {
 		const k = await keys();
 		const hosts: string[] = [];
 		const token = await k.sign(claims);
 		const http = async (r: HttpRequest): Promise<HttpResponse> => {
 			hosts.push(new URL(r.url).host);
-			return r.url.includes("polar") ? { status: 404, json: { detail: "not found" }, text: "" } : { status: 200, json: { ok: true, token }, text: "" };
+			return r.url.includes("stripe.example") ? { status: 404, json: { ok: false }, text: "" } : { status: 200, json: { ok: true, token }, text: "" };
 		};
 		let stored: StoredLicense | null = null;
 		const mgr = new LicenseManager(
 			[
-				new PolarLicenseProvider(http, { apiBase: "https://api.polar.sh", organizationId: "1dbfc517-0bbf-4301-9ba8-555ca42b9737", benefitIds: [], keyPrefix: "CARDSMITH", deviceLabel: "x" }),
+				new StripeLicenseProvider(http, "https://stripe.example.dev", k.pub),
 				new ServerLicenseProvider(http, "https://license.example.dev", k.pub),
 			],
 			() => stored,

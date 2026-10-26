@@ -2,21 +2,19 @@
  * Pro licensing sits behind a small provider interface so the payment rail can change
  * without touching feature code. Feature code only ever asks LicenseManager.isPro().
  *
- * Providers today (config.ts LICENSE_RAIL picks Stripe or Polar; itch is independent):
- *  - StripeLicenseProvider (default): CARDSMITH- keys from Stripe Payment Links, checked by
+ * Providers today:
+ *  - StripeLicenseProvider: CARDSMITH- keys from Stripe Payment Links, checked by
  *    the Mira Forge license service, which returns a signed token verified offline.
- *  - PolarLicenseProvider (fallback): subscription license keys checked directly against
- *    api.polar.sh's public, no-auth customer-portal endpoints. No Mira Forge server.
  *  - ServerLicenseProvider (secondary, off by default): itch.io download keys, which can
  *    only be checked server-side because itch's API key is secret.
  */
 
 export interface LicenseGrant {
-	/** Which payment rail issued it, e.g. "polar" or "itch". */
+	/** Which payment rail issued it, e.g. "stripe" or "itch". */
 	source: string;
 	/** Provider-side expiry (subscription period end), ms since epoch, or null for none/perpetual. */
 	expiresAt: number | null;
-	/** Device activation id, if the rail counts devices (Polar activation id, Stripe random device id). */
+	/** Device activation id, if the rail counts devices (Stripe random device id). */
 	activationId?: string;
 	/** Signed token, if the rail issues one (the Mira Forge license services). */
 	token?: string;

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.4 (2026-10-26)
+
+- **Polar code removed.** The old Polar payment code and its checkout link are gone. Pro is sold only through Stripe (Link); the plugin contacts only your AI provider and, if you enter a key, the Cardsmith license service.
+- **Settings:** the card-count slider no longer uses the deprecated tooltip call; newer Obsidian shows the value next to the slider.
+- **README:** links to the privacy policy, terms and refund policy; exactly what the license service stores (hashed key, hashed device IDs with first-seen and last-seen times, subscription status); price line "Cardsmith Pro: $3/month, tax included, cancel anytime."; clearer AI disclosure: Mira Forge is an AI-run studio, and the code is written and tested by AI agents.
+- No changes to features, pricing or network use.
+
 ## 0.1.3 (2026-10-26)
 
 - **Repository cleanup.** The unused itch.io license-server code was removed from this repository; the license services live in a separate private repository. The plugin itself already used only Obsidian's `requestUrl` for network calls, so nothing changes for you.

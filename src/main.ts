@@ -1,4 +1,4 @@
-import { MarkdownView, Notice, Platform, Plugin, TFile, TFolder, normalizePath, requestUrl, type Editor } from "obsidian";
+import { MarkdownView, Notice, Plugin, TFile, TFolder, normalizePath, requestUrl, type Editor } from "obsidian";
 import { CardsmithSettingTab, DEFAULT_SETTINGS, type CardsmithSettings } from "./settings";
 import { complete, type HttpFn, type ModelConfig } from "./ai/providers";
 import { buildBlock, findBlock, hashText, parseCards, stripBlock, upsertBlock, type Card } from "./core/cards";
@@ -8,10 +8,9 @@ import { allowedTypes, cardCap, PRO_FEATURES, type ProFeature } from "./core/fea
 import { deckFromPath, parseSrCards, toAnkiTsv, type ExportCard } from "./core/anki";
 import { LicenseManager } from "./license/manager";
 import { ServerLicenseProvider } from "./license/server-provider";
-import { PolarLicenseProvider } from "./license/polar-provider";
 import { StripeLicenseProvider } from "./license/stripe-provider";
 import { LicenseError } from "./license/types";
-import { ITCH_LICENSE_SERVER_URL, LICENSE_PUBLIC_JWK, LICENSE_RAIL, POLAR, STRIPE_LICENSE_SERVER_URL } from "./config";
+import { ITCH_LICENSE_SERVER_URL, LICENSE_PUBLIC_JWK, STRIPE_LICENSE_SERVER_URL } from "./config";
 import { ReviewModal } from "./ui/review-modal";
 import { FolderSuggestModal } from "./ui/folder-modal";
 import { ProModal } from "./ui/pro-modal";
@@ -39,13 +38,7 @@ export default class CardsmithPlugin extends Plugin {
 		await this.loadSettings();
 		this.license = new LicenseManager(
 			[
-				// One subscription rail per build (both use CARDSMITH- keys); see LICENSE_RAIL in config.ts.
-				LICENSE_RAIL === "polar"
-					? new PolarLicenseProvider(obsidianHttp, {
-							...POLAR,
-							deviceLabel: `${POLAR.deviceLabel} (${Platform.isMobile ? "mobile" : "desktop"})`,
-						})
-					: new StripeLicenseProvider(obsidianHttp, STRIPE_LICENSE_SERVER_URL, LICENSE_PUBLIC_JWK),
+				new StripeLicenseProvider(obsidianHttp, STRIPE_LICENSE_SERVER_URL, LICENSE_PUBLIC_JWK),
 				new ServerLicenseProvider(obsidianHttp, ITCH_LICENSE_SERVER_URL, LICENSE_PUBLIC_JWK),
 			],
 			() => this.settings.license,

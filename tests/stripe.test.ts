@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { normalizeStripeKey, newDeviceId, StripeLicenseProvider } from "../src/license/stripe-provider";
 import { LicenseManager } from "../src/license/manager";
 import { LicenseError, type StoredLicense } from "../src/license/types";
-import { LICENSE_RAIL, PRO_PAGE_URL, POLAR_PRO_PAGE_URL } from "../src/config";
+import { PRO_PAGE_URL } from "../src/config";
 import type { HttpRequest, HttpResponse } from "../src/ai/providers";
 
 const KEY = "CARDSMITH-DJ5JJ-MP6CX-FJTD8-7QH4S";
@@ -39,11 +39,10 @@ async function fakeService(k: Awaited<ReturnType<typeof keys>>) {
 	return { calls, http, reply: (f: typeof next) => (next = f) };
 }
 
-describe("config: payment rail flag", () => {
-	it("defaults to Stripe, keeps Polar's link only behind the flag, and ships with placeholders", () => {
-		expect(LICENSE_RAIL).toBe("stripe");
-		expect(POLAR_PRO_PAGE_URL).toMatch(/^https:\/\/buy\.polar\.sh\//);
-		expect(PRO_PAGE_URL).not.toContain("polar");
+describe("config: payment rail", () => {
+	it("points Get a license at Stripe only; no Polar code or links remain", () => {
+		expect(PRO_PAGE_URL).toMatch(/^https:\/\/buy\.stripe\.com\//);
+		expect(existsSync("src/license/polar-provider.ts")).toBe(false);
 	});
 });
 

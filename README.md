@@ -13,15 +13,17 @@ Cardsmith writes cards in the format used by the [Spaced Repetition](https://git
 - **Payment is required for full access.** Cardsmith is free to use for single notes. Some features (listed below) need a paid **Cardsmith Pro** license. Pro is sold by Mira Forge through Link, Stripe's merchant-of-record service ([Stripe Managed Payments](https://docs.stripe.com/payments/managed-payments)). Your card statement shows **LINK.COM\* MIRAFORGE**. Nothing is locked behind an account in Obsidian, and the free features never stop working.
 - **Network use.** Cardsmith only connects to:
   1. **The AI provider you choose** (OpenAI, Anthropic, OpenRouter, any OpenAI-compatible endpoint, or Ollama on your own machine). This happens only when you ask it to generate cards. It sends the note or selection you picked plus instructions. Requests go straight from your device to that provider under your own account. Mira Forge never receives your notes or your API key.
-  2. **The Cardsmith license service** (a Mira Forge Cloudflare Worker at `cardsmith-license-stripe.miraforge.workers.dev`), only if you enter a Pro license key. It sends the key, a random device ID generated on your device, and the product name `cardsmith`. This happens once when you activate, then at most once a day to check the subscription is still active, and once when you select **Remove license**. No note content, vault names, names or email addresses are sent, and the device ID is not derived from your hardware or account. The service stores only a hash of the key, a hash of the device ID, the Stripe subscription and customer IDs, and the subscription's status and end date.
+  2. **The Cardsmith license service** (a Mira Forge Cloudflare Worker at `cardsmith-license-stripe.miraforge.workers.dev`), only if you enter a Pro license key. It sends the key, a random device ID generated on your device, and the product name `cardsmith`. This happens once when you activate, then at most once a day to check the subscription is still active, and once when you select **Remove license**. No note content, vault names, names or email addresses are sent, and the device ID is not derived from your hardware or account. The service stores only: a SHA-256 hash of the key (never the key itself); for each activated device, a SHA-256 hash of its device ID with the time it was first seen and last seen; the Stripe subscription and customer IDs; and the subscription's status, renewal or end date, and whether it was refunded or disputed; plus the IDs of Stripe payment events it has already processed (deleted after 30 days). See the [privacy policy](https://miraforge-site.pages.dev/privacy/), [terms](https://miraforge-site.pages.dev/terms/) and [refund policy](https://miraforge-site.pages.dev/refunds/).
 
   Nothing else: no analytics, no telemetry, no crash reporting, no update checks, no ads. (**Get a license** opens Stripe's checkout page in your web browser. The plugin itself sends nothing when you click it.)
 - **Your API key stays on your device.** It is kept in Obsidian's secret storage (Settings → Keychain), not in your vault files or the plugin's `data.json`.
 - **Files.** Cardsmith only writes inside your vault: the card block in the note you chose, and Anki export files in a folder you pick (default `Cardsmith exports/`).
 - **Which notes Cardsmith reads.** Generating cards reads only the open note (or your selection). The folder commands (Pro) read only the notes inside the folder you pick, found by walking that folder and its subfolders; nothing outside it is listed or opened, and the Anki export folder is skipped. See **Vault access** below.
-- **AI-assisted code.** Much of this plugin's code was written with AI assistance, then reviewed and tested by Mira Forge. The source is readable and unminified; see `src/`.
+- **Made by AI agents.** Mira Forge is an AI-run studio: Cardsmith's code is written and tested by AI agents, not reviewed line by line by a human developer. Every change runs an automated test suite and is tested in a real copy of Obsidian. The source is public, readable and unminified; see `src/`.
 
 ## Free and Pro
+
+**Cardsmith Pro: $3/month, tax included, cancel anytime.**
 
 | | Free | Pro |
 |---|---|---|
@@ -86,7 +88,7 @@ Buy Pro from the link in **Settings → Cardsmith → License**, then paste your
 
 ## Privacy
 
-Mira Forge runs one server for Cardsmith: the license service described under **Network use**, which stores no names, emails or payment details. Stripe and Link process purchases as merchant of record under the [Link privacy policy](https://link.com/privacy) and [Stripe privacy policy](https://stripe.com/privacy). Your AI provider processes the text you send under its own terms.
+Mira Forge runs one server for Cardsmith: the license service described under **Network use**. It stores no names, emails, payment details or note content; for each device it keeps only a hashed device ID with first-seen and last-seen times. Full details: [privacy policy](https://miraforge-site.pages.dev/privacy/), [terms](https://miraforge-site.pages.dev/terms/), [refund policy](https://miraforge-site.pages.dev/refunds/). Stripe and Link process purchases as merchant of record under the [Link privacy policy](https://link.com/privacy) and [Stripe privacy policy](https://stripe.com/privacy). Your AI provider processes the text you send under its own terms.
 
 ## Development
 
@@ -97,8 +99,6 @@ npm run build      # type-check + bundle main.js (not minified)
 npm test           # unit tests with a mocked Obsidian API
 npm run lint       # eslint-plugin-obsidianmd
 ```
-
-The Stripe license service lives in a separate project (`cardsmith-license-stripe`). The original Polar rail is still in the code (`src/license/polar-provider.ts`) as a fallback, but it is inactive unless a build sets `LICENSE_RAIL = "polar"` in `src/config.ts`. With the default `"stripe"` setting, the plugin never contacts Polar.
 
 The license services (the Stripe license Worker, and an unused itch.io license check) live in a separate private repository, not in this plugin repo. The plugin's itch.io check is off in this build, so it makes no requests to it. Everything the plugin sends over the network is described under **Network use** above.
 

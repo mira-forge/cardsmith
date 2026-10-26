@@ -2,7 +2,7 @@ import { App, PluginSettingTab, SecretComponent, Setting, type SettingDefinition
 import type CardsmithPlugin from "./main";
 import { PRESETS, type ProviderKind } from "./ai/providers";
 import { PRO_FEATURES } from "./core/features";
-import { FREE_MAX_CARDS, LICENSE_RAIL, PRO_MAX_CARDS, PRO_PAGE_URL } from "./config";
+import { FREE_MAX_CARDS, PRO_MAX_CARDS, PRO_PAGE_URL } from "./config";
 import type { StoredLicense } from "./license/types";
 
 export interface CardsmithSettings {
@@ -204,7 +204,6 @@ export class CardsmithSettingTab extends PluginSettingTab {
 						sl
 							.setLimits(1, cap, 1)
 							.setValue(Math.min(s.maxCards, cap))
-							.setDynamicTooltip()
 							.onChange(async (v) => {
 								s.maxCards = v;
 								await save();
@@ -340,7 +339,7 @@ export class CardsmithSettingTab extends PluginSettingTab {
 					box.createEl("p", {
 						cls: "cardsmith-muted",
 						text: lic.salesOpen()
-							? `Activating sends only your license key${LICENSE_RAIL === "polar" ? " to Polar" : " and a random device id to the Cardsmith license service"} to check it, then once a day at most. Everything in the free version works without it.`
+							? "Activating sends only your license key and a random device id to the Cardsmith license service to check it, then once a day at most. Everything in the free version works without it."
 							: "Pro is not on sale yet. All free features work without it.",
 					});
 				},
