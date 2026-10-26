@@ -16,6 +16,7 @@ Cardsmith writes cards in the format used by the [Spaced Repetition](https://git
   Nothing else: no analytics, no telemetry, no crash reporting, no update checks, no ads. (**Get a license** opens Stripe's checkout page in your web browser. The plugin itself sends nothing when you click it.)
 - **Your API key stays on your device.** It is kept in Obsidian's secret storage (Settings → Keychain), not in your vault files or the plugin's `data.json`.
 - **Files.** Cardsmith only writes inside your vault: the card block in the note you chose, and Anki export files in a folder you pick (default `Cardsmith exports/`).
+- **Which notes Cardsmith reads.** Generating cards reads only the open note (or your selection). The folder commands (Pro) read only the notes inside the folder you pick, found by walking that folder and its subfolders; nothing outside it is listed or opened, and the Anki export folder is skipped. See **Vault access** below.
 - **AI-assisted code.** Much of this plugin's code was written with AI assistance, then reviewed and tested by Mira Forge. The source is readable and unminified; see `src/`.
 
 ## Free and Pro
@@ -58,6 +59,15 @@ If your subscription ends, Pro features switch off and your existing cards stay 
 ### Card syntax written
 
 `Question::Answer` (basic), `Term:::Definition` (reversed), multi-line cards separated by `?` or `??`, and cloze cards using `==highlights==`, all as described in the Spaced Repetition plugin's documentation. The deck tag (default `#flashcards`) is configurable.
+
+## Vault access
+
+Cardsmith never scans your whole vault on its own.
+
+- **This note or selection:** reads only the active note.
+- **Export this note to Anki:** reads only the active note and its tags from Obsidian's metadata cache.
+- **Generate or export a folder (Pro):** lists Markdown notes only inside the folder you choose, by walking that folder's children (subfolders included). Files outside it are not listed or read.
+- **When the whole vault is involved:** only if you pick **/ (whole vault)** in the folder picker. Then every note except those in the Anki export folder is in scope, because that is what you asked for. The folder picker itself lists folder names (not files or contents) so you can choose one.
 
 ## Pro license
 

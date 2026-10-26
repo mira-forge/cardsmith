@@ -3,6 +3,7 @@ import { CardsmithSettingTab, DEFAULT_SETTINGS, type CardsmithSettings } from ".
 import { complete, type HttpFn, type ModelConfig } from "./ai/providers";
 import { buildBlock, findBlock, hashText, parseCards, stripBlock, upsertBlock, type Card } from "./core/cards";
 import { buildMessages } from "./core/prompt";
+import { markdownUnder } from "./core/scope";
 import { allowedTypes, cardCap, PRO_FEATURES, type ProFeature } from "./core/features";
 import { deckFromPath, parseSrCards, toAnkiTsv, type ExportCard } from "./core/anki";
 import { LicenseManager } from "./license/manager";
@@ -196,12 +197,9 @@ export default class CardsmithPlugin extends Plugin {
 		else write(cards);
 	}
 
+	/** Notes under the chosen folder only (walks that folder's children, never the whole vault). */
 	private markdownIn(folder: TFolder): TFile[] {
-		const prefix = folder.isRoot() ? "" : folder.path + "/";
-		const exportDir = normalizePath(this.settings.exportFolder) + "/";
-		return this.app.vault
-			.getMarkdownFiles()
-			.filter((f) => f.path.startsWith(prefix) && !f.path.startsWith(exportDir));
+		return markdownUnder(folder, this.settings.exportFolder);
 	}
 
 	/** Pro: generate for every note in a folder, skipping notes whose cards are up to date. */

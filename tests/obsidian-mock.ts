@@ -10,13 +10,15 @@ export function normalizePath(p: string) { return p.replace(/\\/g, "/").replace(
 export const requestLog: unknown[] = [];
 export async function requestUrl(req: unknown) { requestLog.push(req); return { status: 599, json: null, text: "" }; }
 
-export class TFolder {
-	constructor(public path: string) {}
+export class TAbstractFile {}
+export class TFolder extends TAbstractFile {
+	children: TAbstractFile[] = [];
+	constructor(public path: string) { super(); }
 	get name() { return this.path.split("/").pop() ?? ""; }
 	isRoot() { return this.path === "" || this.path === "/"; }
 }
-export class TFile {
-	constructor(public path: string) {}
+export class TFile extends TAbstractFile {
+	constructor(public path: string) { super(); }
 	get basename() { return (this.path.split("/").pop() ?? "").replace(/\.md$/, ""); }
 	get extension() { return this.path.split(".").pop() ?? ""; }
 }

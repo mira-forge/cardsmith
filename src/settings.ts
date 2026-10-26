@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, SecretComponent, Setting } from "obsidian";
+import { App, PluginSettingTab, SecretComponent, Setting, type SettingDefinitionItem } from "obsidian";
 import type CardsmithPlugin from "./main";
 import { PRESETS, type ProviderKind } from "./ai/providers";
 import { PRO_FEATURES } from "./core/features";
@@ -42,6 +42,25 @@ export const DEFAULT_SETTINGS: CardsmithSettings = {
 	license: null,
 };
 
+/**
+ * One settings row. The same list drives both renderers:
+ * - Obsidian 1.13+: getSettingDefinitions() returns these as declarative definitions, so every
+ *   row (name, description and aliases) shows up in Obsidian's settings search.
+ * - Obsidian 1.11.4 to 1.12.x: display() builds the same rows imperatively.
+ */
+interface Row {
+	name: string;
+	desc?: string;
+	aliases?: string[];
+	/** Adds the controls. May return the Setting (which is thenable), so the type is unknown, not void. */
+	build: (setting: Setting) => unknown;
+}
+
+interface Section {
+	heading?: string;
+	rows: Row[];
+}
+
 export class CardsmithSettingTab extends PluginSettingTab {
 	constructor(
 		app: App,
@@ -50,123 +69,191 @@ export class CardsmithSettingTab extends PluginSettingTab {
 		super(app, plugin);
 	}
 
+	/**
+	 * Re-render after a change that adds, removes or relabels rows. Feature-detects the
+	 * 1.13+ update() (declarative re-render); older builds re-run the imperative renderer.
+	 */
+	private refresh(): void {
+		const update = (this as { update?: () => void }).update;
+		if (typeof update === "function") update.call(this);
+		else this.renderLegacy();
+	}
+
+	/** Obsidian 1.13+: declarative definitions, indexed by the settings search. */
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		return this.sections().map((sec) => ({
+			type: "group" as const,
+			heading: sec.heading,
+			items: sec.rows.map((r) => ({
+				name: r.name,
+				desc: r.desc,
+				aliases: r.aliases,
+				render: (setting: Setting) => {
+					setting.setName(r.name);
+					if (r.desc) setting.setDesc(r.desc);
+					r.build(setting);
+				},
+			})),
+		}));
+	}
+
+	/** Fallback renderer for Obsidian before 1.13.0 (minAppVersion is 1.11.4). Not called on 1.13+. */
 	display(): void {
+		this.renderLegacy();
+	}
+
+	private renderLegacy(): void {
 		const { containerEl } = this;
 		containerEl.empty();
+		for (const sec of this.sections()) {
+			if (sec.heading) new Setting(containerEl).setName(sec.heading).setHeading();
+			for (const r of sec.rows) {
+				const setting = new Setting(containerEl).setName(r.name);
+				if (r.desc) setting.setDesc(r.desc);
+				r.build(setting);
+			}
+		}
+	}
+
+	private sections(): Section[] {
 		const s = this.plugin.settings;
 		const pro = this.plugin.license.isPro();
 		const save = () => this.plugin.saveSettings();
+		const cap = pro ? PRO_MAX_CARDS : FREE_MAX_CARDS;
 
-		new Setting(containerEl)
-			.setName("Model provider")
-			.setDesc("Requests go directly from this device to the provider you pick. Cardsmith never sees your notes or keys.")
-			.addDropdown((d) => {
-				for (const [id, p] of Object.entries(PRESETS)) d.addOption(id, p.label);
-				d.setValue(s.preset).onChange(async (v) => {
-					const p = PRESETS[v];
-					if (!p) return;
-					s.preset = v;
-					s.kind = p.kind;
-					s.baseUrl = p.baseUrl;
-					s.model = p.model;
-					await save();
-					this.display();
-				});
-			});
-
+		const provider: Row[] = [
+			{
+				name: "Model provider",
+				desc: "Requests go directly from this device to the provider you pick. Cardsmith never sees your notes or keys.",
+				aliases: ["AI", "OpenAI", "Anthropic", "Ollama", "local model", "LLM"],
+				build: (st) =>
+					st.addDropdown((d) => {
+						for (const [id, p] of Object.entries(PRESETS)) d.addOption(id, p.label);
+						d.setValue(s.preset).onChange(async (v) => {
+							const p = PRESETS[v];
+							if (!p) return;
+							s.preset = v;
+							s.kind = p.kind;
+							s.baseUrl = p.baseUrl;
+							s.model = p.model;
+							await save();
+							this.refresh();
+						});
+					}),
+			},
+		];
 		if (s.kind !== "anthropic") {
-			new Setting(containerEl)
-				.setName("Base URL")
-				.setDesc(s.kind === "ollama" ? "Where Ollama is listening." : "OpenAI-compatible endpoint, ending in /v1 for most providers.")
-				.addText((t) =>
-					t.setValue(s.baseUrl).onChange(async (v) => {
-						s.baseUrl = v.trim();
+			provider.push({
+				name: "Base URL",
+				desc: s.kind === "ollama" ? "Where Ollama is listening." : "OpenAI-compatible endpoint, ending in /v1 for most providers.",
+				aliases: ["endpoint", "server", "host"],
+				build: (st) =>
+					st.addText((t) =>
+						t.setValue(s.baseUrl).onChange(async (v) => {
+							s.baseUrl = v.trim();
+							await save();
+						}),
+					),
+			});
+		}
+		provider.push({
+			name: "Model",
+			aliases: ["model name"],
+			build: (st) =>
+				st.addText((t) =>
+					t.setValue(s.model).onChange(async (v) => {
+						s.model = v.trim();
 						await save();
 					}),
-				);
-		}
-
-		new Setting(containerEl).setName("Model").addText((t) =>
-			t.setValue(s.model).onChange(async (v) => {
-				s.model = v.trim();
-				await save();
-			}),
-		);
-
+				),
+		});
 		if (s.kind !== "ollama") {
-			new Setting(containerEl)
-				.setName("API key")
-				.setDesc("Stored in Obsidian's secret storage on this device, not in your vault files.")
-				.addComponent((el) =>
-					new SecretComponent(this.app, el).setValue(s.apiKeySecret).onChange(async (v) => {
-						s.apiKeySecret = v;
-						await save();
-					}),
-				);
+			provider.push({
+				name: "API key",
+				desc: "Stored in Obsidian's secret storage on this device, not in your vault files.",
+				aliases: ["token", "secret", "key"],
+				build: (st) =>
+					st.addComponent((el) =>
+						new SecretComponent(this.app, el).setValue(s.apiKeySecret).onChange(async (v) => {
+							s.apiKeySecret = v ?? "";
+							await save();
+						}),
+					),
+			});
 		}
 
-		new Setting(containerEl).setName("Cards").setHeading();
+		const cards: Row[] = [
+			{
+				name: "Deck tag",
+				desc: "Added above the cards so spaced repetition plugins pick them up.",
+				aliases: ["tag", "spaced repetition", "flashcards"],
+				build: (st) =>
+					st.addText((t) =>
+						t.setValue(s.deckTag).onChange(async (v) => {
+							s.deckTag = v.trim() || "#flashcards";
+							await save();
+						}),
+					),
+			},
+			{
+				name: "Cards per note",
+				desc: pro ? `Up to ${PRO_MAX_CARDS}.` : `Up to ${FREE_MAX_CARDS} on the free version, ${PRO_MAX_CARDS} with Pro.`,
+				aliases: ["number of cards", "max cards", "limit"],
+				build: (st) =>
+					st.addSlider((sl) =>
+						sl
+							.setLimits(1, cap, 1)
+							.setValue(Math.min(s.maxCards, cap))
+							.setDynamicTooltip()
+							.onChange(async (v) => {
+								s.maxCards = v;
+								await save();
+							}),
+					),
+			},
+			{
+				name: "Card language",
+				desc: "Leave empty to match each note's language.",
+				aliases: ["language", "translate"],
+				build: (st) =>
+					st.addText((t) =>
+						t.setPlaceholder("Same as note").setValue(s.language).onChange(async (v) => {
+							s.language = v;
+							await save();
+						}),
+					),
+			},
+			{
+				name: "Review cards before saving",
+				desc: "Shows each card so you can edit or drop it before it is written to the note.",
+				aliases: ["review", "preview", "confirm"],
+				build: (st) =>
+					st.addToggle((t) =>
+						t.setValue(s.reviewBeforeInsert).onChange(async (v) => {
+							s.reviewBeforeInsert = v;
+							await save();
+						}),
+					),
+			},
+			{
+				name: "Anki export folder",
+				aliases: ["Anki", "export"],
+				build: (st) =>
+					st.addText((t) =>
+						t.setValue(s.exportFolder).onChange(async (v) => {
+							s.exportFolder = v.trim() || "Cardsmith exports";
+							await save();
+						}),
+					),
+			},
+		];
 
-		new Setting(containerEl)
-			.setName("Deck tag")
-			.setDesc("Added above the cards so spaced repetition plugins pick them up.")
-			.addText((t) =>
-				t.setValue(s.deckTag).onChange(async (v) => {
-					s.deckTag = v.trim() || "#flashcards";
-					await save();
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName("Cards per note")
-			.setDesc(pro ? `Up to ${PRO_MAX_CARDS}.` : `Up to ${FREE_MAX_CARDS} on the free version, ${PRO_MAX_CARDS} with Pro.`)
-			.addSlider((sl) =>
-				sl
-					.setLimits(1, pro ? PRO_MAX_CARDS : FREE_MAX_CARDS, 1)
-					.setValue(Math.min(s.maxCards, pro ? PRO_MAX_CARDS : FREE_MAX_CARDS))
-					.setDynamicTooltip()
-					.onChange(async (v) => {
-						s.maxCards = v;
-						await save();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName("Card language")
-			.setDesc("Leave empty to match each note's language.")
-			.addText((t) =>
-				t.setPlaceholder("Same as note").setValue(s.language).onChange(async (v) => {
-					s.language = v;
-					await save();
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName("Review cards before saving")
-			.setDesc("Shows each card so you can edit or drop it before it is written to the note.")
-			.addToggle((t) =>
-				t.setValue(s.reviewBeforeInsert).onChange(async (v) => {
-					s.reviewBeforeInsert = v;
-					await save();
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName("Anki export folder")
-			.addText((t) =>
-				t.setValue(s.exportFolder).onChange(async (v) => {
-					s.exportFolder = v.trim() || "Cardsmith exports";
-					await save();
-				}),
-			);
-
-		new Setting(containerEl).setName("Pro").setHeading();
-
-		const proToggle = (name: string, desc: string, get: () => boolean, set: (v: boolean) => void) =>
-			new Setting(containerEl)
-				.setName(name)
-				.setDesc(pro ? desc : `${desc} Requires Pro.`)
-				.addToggle((t) =>
+		const proToggle = (name: string, desc: string, aliases: string[], get: () => boolean, set: (v: boolean) => void): Row => ({
+			name,
+			desc: pro ? desc : `${desc} Requires Pro.`,
+			aliases,
+			build: (st) =>
+				st.addToggle((t) =>
 					t
 						.setValue(pro && get())
 						.setDisabled(!pro)
@@ -174,28 +261,37 @@ export class CardsmithSettingTab extends PluginSettingTab {
 							set(v);
 							await save();
 						}),
-				);
-		proToggle("Reversed cards", "Term and definition cards you review both ways.", () => s.useReversed, (v) => (s.useReversed = v));
-		proToggle("Cloze cards", "Fill-in-the-blank cards using ==highlights==.", () => s.useCloze, (v) => (s.useCloze = v));
+				),
+		});
+		const proRows: Row[] = [
+			proToggle("Reversed cards", "Term and definition cards you review both ways.", ["reverse", "both ways"], () => s.useReversed, (v) => (s.useReversed = v)),
+			proToggle("Cloze cards", "Fill-in-the-blank cards using ==highlights==.", ["cloze", "fill in the blank", "highlights"], () => s.useCloze, (v) => (s.useCloze = v)),
+			{
+				name: "Custom instructions",
+				desc: pro ? "Extra guidance for the model, for example exam style or level." : "Requires Pro.",
+				aliases: ["prompt", "instructions"],
+				build: (st) =>
+					st.addTextArea((t) => {
+						t.setValue(s.extraInstructions).setDisabled(!pro);
+						t.onChange(async (v) => {
+							s.extraInstructions = v;
+							await save();
+						});
+					}),
+			},
+		];
 
-		new Setting(containerEl)
-			.setName("Custom instructions")
-			.setDesc(pro ? "Extra guidance for the model, for example exam style or level." : "Requires Pro.")
-			.addTextArea((t) => {
-				t.setValue(s.extraInstructions).setDisabled(!pro);
-				t.onChange(async (v) => {
-					s.extraInstructions = v;
-					await save();
-				});
-			});
-
-		this.renderLicense(containerEl);
+		return [
+			{ rows: provider },
+			{ heading: "Cards", rows: cards },
+			{ heading: "Pro", rows: proRows },
+			{ heading: "License", rows: this.licenseRows() },
+		];
 	}
 
-	private renderLicense(containerEl: HTMLElement): void {
+	private licenseRows(): Row[] {
 		const lic = this.plugin.license;
 		const st = lic.getStatus();
-		new Setting(containerEl).setName("License").setHeading();
 
 		if (st.state === "pro" || st.state === "paused") {
 			const desc =
@@ -206,54 +302,71 @@ export class CardsmithSettingTab extends PluginSettingTab {
 						: st.expiresAt
 							? `Pro is active. Current period ends ${new Date(st.expiresAt).toLocaleDateString()} and renews automatically unless cancelled.`
 							: "Pro is active.";
-			new Setting(containerEl)
-				.setName(st.state === "paused" ? "Pro paused" : "Pro active")
-				.setDesc(desc)
-				.addButton((b) =>
-					b.setButtonText("Re-check").onClick(async () => {
-						await lic.revalidate(true);
-						this.display();
-					}),
-				)
-				.addButton((b) =>
-					b.setButtonText("Remove license").onClick(async () => {
-						await lic.remove();
-						this.display();
-					}),
+			return [
+				{
+					name: st.state === "paused" ? "Pro paused" : "Pro active",
+					desc,
+					aliases: ["license", "subscription", "Pro"],
+					build: (row) =>
+						row
+							.addButton((b) =>
+								b.setButtonText("Re-check").onClick(async () => {
+									await lic.revalidate(true);
+									this.refresh();
+								}),
+							)
+							.addButton((b) =>
+								b.setButtonText("Remove license").onClick(async () => {
+									await lic.remove();
+									this.refresh();
+								}),
+							),
+				},
+			];
+		}
+
+		const rows: Row[] = [
+			{
+				name: "Cardsmith Pro",
+				aliases: ["license", "subscription", "upgrade", "Pro"],
+				build: (row) => {
+					row.settingEl.addClass("cardsmith-pro-box");
+					const box = row.descEl;
+					box.empty();
+					box.createEl("p", { text: "A Pro license unlocks:" });
+					const ul = box.createEl("ul");
+					for (const f of Object.values(PRO_FEATURES)) ul.createEl("li", { text: f });
+					if (st.message) box.createEl("p", { cls: "cardsmith-muted", text: st.message });
+					box.createEl("p", {
+						cls: "cardsmith-muted",
+						text: lic.salesOpen()
+							? `Activating sends only your license key${LICENSE_RAIL === "polar" ? " to Polar" : " and a random device id to the Cardsmith license service"} to check it, then once a day at most. Everything in the free version works without it.`
+							: "Pro is not on sale yet. All free features work without it.",
+					});
+				},
+			},
+		];
+		if (!lic.salesOpen()) return rows;
+
+		rows.push({
+			name: "License key",
+			aliases: ["activate", "license", "key"],
+			build: (row) => {
+				let entered = "";
+				row.addText((t) => t.setPlaceholder("Paste your key").onChange((v) => (entered = v))).addButton((b) =>
+					b
+						.setButtonText("Activate")
+						.setCta()
+						.onClick(async () => {
+							b.setDisabled(true);
+							await this.plugin.activateLicense(entered);
+							b.setDisabled(false);
+							this.refresh();
+						}),
 				);
-			return;
-		}
-
-		const box = containerEl.createDiv({ cls: "cardsmith-pro-box" });
-		box.createEl("p", { text: "A Pro license unlocks:" });
-		const ul = box.createEl("ul");
-		for (const f of Object.values(PRO_FEATURES)) ul.createEl("li", { text: f });
-		if (st.message) box.createEl("p", { cls: "cardsmith-muted", text: st.message });
-
-		if (!lic.salesOpen()) {
-			box.createEl("p", { cls: "cardsmith-muted", text: "Pro is not on sale yet. All free features work without it." });
-			return;
-		}
-		box.createEl("p", {
-			cls: "cardsmith-muted",
-			text: `Activating sends only your license key${LICENSE_RAIL === "polar" ? " to Polar" : " and a random device id to the Cardsmith license service"} to check it, then once a day at most. Everything in the free version works without it.`,
+				if (PRO_PAGE_URL) row.addButton((b) => b.setButtonText("Get a license").onClick(() => window.open(PRO_PAGE_URL)));
+			},
 		});
-
-		let entered = "";
-		const row = new Setting(containerEl)
-			.setName("License key")
-			.addText((t) => t.setPlaceholder("Paste your key").onChange((v) => (entered = v)))
-			.addButton((b) =>
-				b
-					.setButtonText("Activate")
-					.setCta()
-					.onClick(async () => {
-						b.setDisabled(true);
-						await this.plugin.activateLicense(entered);
-						b.setDisabled(false);
-						this.display();
-					}),
-			);
-		if (PRO_PAGE_URL) row.addButton((b) => b.setButtonText("Get a license").onClick(() => window.open(PRO_PAGE_URL)));
+		return rows;
 	}
 }
