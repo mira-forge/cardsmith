@@ -24,9 +24,7 @@ Free covers single notes (up to 10 cards each, cloze and reversed cards included
 
 Cardsmith doesn't replace your review tool; it fills it. Cards are written in the format used by the [Spaced Repetition](https://github.com/st3v3nmw/obsidian-spaced-repetition) plugin, so you keep reviewing in Obsidian exactly as you do now. Prefer Anki? Export the same cards to an Anki import file.
 
-Cards stay plain text in your notes, ready for Spaced Repetition, and export to Anki offline in one command. No database, nothing to sync.
-
-Spaced Repetition saves each card's schedule as a `<!--SR:...-->` comment right after the card. When Cardsmith rewrites its block (running a note again, or a Pro folder refresh), every card that keeps its question gets that comment back, so its review history stays. Cards that are no longer in the block lose theirs, and Cardsmith tells you how many. (Versions before 0.1.5 dropped these comments on a re-run.)
+Spaced Repetition saves each card's schedule as a `<!--SR:...-->` comment right after the card. When Cardsmith rewrites its block (running a note again, or a Pro folder refresh), every card that keeps its question gets that comment back, so its review history stays. A reviewed card that is not in the new set is kept at the end of the block, with its comment, unless you removed it yourself in the review window, which tells you how many cards in the note have review history. Folder runs never remove reviewed cards. (Versions before 0.1.5 dropped these comments on a re-run.)
 
 ## How to use
 

@@ -140,10 +140,12 @@ export interface BlockInfo {
 
 /** Locate an existing managed block in a note. */
 export function findBlock(note: string): BlockInfo | null {
-	const start = note.indexOf(BLOCK_START);
-	if (start < 0) return null;
-	const endIdx = note.indexOf(BLOCK_END, start);
+	const first = note.indexOf(BLOCK_START);
+	if (first < 0) return null;
+	const endIdx = note.indexOf(BLOCK_END, first);
 	if (endIdx < 0) return null;
+	// a start marker whose end marker was deleted must not swallow text up to a later block's end
+	const start = note.lastIndexOf(BLOCK_START, endIdx);
 	const header = note.slice(start, note.indexOf("\n", start) >= 0 ? note.indexOf("\n", start) : endIdx);
 	const m = header.match(/hash=([a-f0-9]+)/);
 	return { start, end: endIdx + BLOCK_END.length, hash: m && m[1] ? m[1] : null };
@@ -160,15 +162,15 @@ export function stripBlock(note: string): string {
  * The new block for a note, with Spaced Repetition review history carried over from the
  * note's current block for every card that is still there.
  */
-export function mergeBlock(note: string, block: string): CarryResult {
+export function mergeBlock(note: string, block: string, keepUnmatched = false): CarryResult {
 	const b = findBlock(note);
-	return carryHistory(b ? note.slice(b.start, b.end) : null, block);
+	return carryHistory(b ? note.slice(b.start, b.end) : null, block, keepUnmatched);
 }
 
 /** Replace the managed block (keeping review history of cards that stay), or append it at the end of the note. */
-export function upsertBlock(note: string, block: string): string {
+export function upsertBlock(note: string, block: string, keepUnmatched = false): string {
 	const b = findBlock(note);
-	if (b) return note.slice(0, b.start) + mergeBlock(note, block).block + note.slice(b.end);
+	if (b) return note.slice(0, b.start) + mergeBlock(note, block, keepUnmatched).block + note.slice(b.end);
 	const base = note.replace(/\s+$/, "");
 	return `${base}${base ? "\n\n" : ""}${block}\n`;
 }

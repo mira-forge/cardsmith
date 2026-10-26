@@ -112,7 +112,7 @@ describe("review history survives a rewrite (fix for 0.1.4 data loss)", () => {
 
 	it("is a no-op for notes without a block or without history, and leaves text outside the block alone", () => {
 		const block = buildBlock([basic("Q", "A")], "#flashcards", "l");
-		expect(carryHistory(null, block)).toEqual({ block, kept: 0, dropped: 0 });
+		expect(carryHistory(null, block)).toEqual({ block, kept: 0, dropped: 0, preserved: 0 });
 		const plain = reviewedNote("Q::A");
 		expect(mergeBlock(plain, block).block).toBe(block);
 		const outside = `Intro ${SR1}\n\n` + reviewedNote(`Q::A\n${SR2}`);
@@ -139,5 +139,57 @@ describe("multi-line cards are safe for Spaced Repetition", () => {
 	});
 	it("multi-line cloze becomes one line", () => {
 		expect(formatCard({ type: "cloze", front: "The ==nucleus==\n\n holds DNA.", back: "" })).toBe("The ==nucleus== holds DNA.");
+	});
+});
+
+describe("reviewed cards are never removed unseen (keepUnmatched)", () => {
+	it("keeps a reviewed card that is not in the new set, with its history, at the end of the block", () => {
+		const note = reviewedNote(`Q1::A1\n${SR1}\n\nGone?::Yes\n${SR2}\n\nNo history::x`);
+		const r = mergeBlock(note, buildBlock([basic("Q1", "A1"), basic("New", "Card")], "#flashcards", "k"), true);
+		expect(r).toMatchObject({ kept: 1, dropped: 0, preserved: 1 });
+		expect(r.block).toContain(`Q1::A1\n${SR1}`);
+		expect(r.block).toContain(`New::Card\n\nGone?::Yes\n${SR2}\n%% cardsmith:end %%`);
+		expect(r.block).not.toContain("No history"); // unreviewed cards are still replaced
+		expect(parseSrCards(r.block).map((c) => c.front)).toEqual(["Q1", "New", "Gone?"]);
+	});
+
+	it("keeps multi-line, same-line and callout history verbatim, and is stable on re-run", () => {
+		const body = [`Stages\n?\nPro, meta,\nana, telo\n${SR3}`, `Same::line ${SR1}`, `Call::out\n> [!sr|card-metadata] \n>  ${SR2}`].join("\n\n");
+		const note = reviewedNote(body);
+		const block = buildBlock([basic("Other", "Card")], "#flashcards", "k");
+		const once = upsertBlock(note, block, true);
+		expect(once).toContain(`Stages\n?\nPro, meta,\nana, telo\n${SR3}`);
+		expect(once).toContain(`Same::line ${SR1}`);
+		expect(once).toContain(`Call::out\n> [!sr|card-metadata] \n>  ${SR2}`);
+		const twice = upsertBlock(once, block, true);
+		expect(twice).toBe(once);
+		expect(twice.match(/<!--SR:/g)?.length).toBe(3);
+	});
+
+	it("without keepUnmatched the unmatched card is removed and counted", () => {
+		const note = reviewedNote(`Gone?::Yes\n${SR2}`);
+		const r = mergeBlock(note, buildBlock([basic("New", "Card")], "#flashcards", "k"));
+		expect(r).toMatchObject({ kept: 0, dropped: 1, preserved: 0 });
+		expect(r.block).not.toContain("Gone?");
+	});
+});
+
+describe("findBlock with a deleted end marker", () => {
+	it("an orphan start marker never makes Cardsmith delete the user's text (E8)", () => {
+		const n = ["# T", "", "Intro.", "", "%% cardsmith:start hash=aaaaaaaa %%", "#flashcards", "", "Q::A", SR1, "", "## My later notes", "Important paragraph the user wrote.", ""].join("\n");
+		const once = upsertBlock(n, buildBlock([basic("Q", "A")], "#flashcards", "b"));
+		const twice = upsertBlock(once, buildBlock([basic("Q", "A")], "#flashcards", "c"));
+		expect(once).toContain("Important paragraph the user wrote.");
+		expect(twice).toContain("Important paragraph the user wrote.");
+		expect(twice).toContain("## My later notes");
+		expect(findBlock(twice)?.hash).toBe("c");
+	});
+
+	it("a block id answer like 'x ^2' is not doubled on re-run (E9)", () => {
+		const n = reviewedNote(`What is x times x?::x ^2\n${SR1}`);
+		const block = buildBlock([basic("What is x times x?", "x ^2")], "#flashcards", "b");
+		const out = upsertBlock(upsertBlock(n, block), block);
+		expect(out).toContain(`What is x times x?::x ^2\n${SR1}`);
+		expect(out).not.toContain("^2 ^2");
 	});
 });

@@ -30,6 +30,8 @@ interface Entry {
 	full: string; // normalized front + back
 	front: string; // normalized front
 	history: History | null;
+	/** Last line of the card's history (or of the card when it has none). */
+	end: number;
 }
 
 function norm(s: string): string {
@@ -76,6 +78,7 @@ function scan(lines: string[]): Entry[] {
 			full: norm(`${c.front}\n${c.back}`),
 			front: norm(c.front),
 			history: sameLine || blockId ? { lines: [], sameLine, blockId } : null,
+			end: idx[idx.length - 1]!,
 		};
 		return e;
 	};
@@ -102,6 +105,7 @@ function scan(lines: string[]): Entry[] {
 				const h = target.history ?? { lines: [], sameLine: "", blockId: "" };
 				h.lines.push(...hist);
 				target.history = h;
+				target.end = i;
 			}
 			last = null;
 			continue;
@@ -134,19 +138,24 @@ export interface CarryResult {
 	block: string;
 	/** Cards in the new block that got their review history back. */
 	kept: number;
-	/** Cards with review history in the old block that are not in the new block. */
+	/** Cards with review history in the old block that are not in the new block (and were removed). */
 	dropped: number;
+	/** Reviewed cards that are not in the new block but were kept at its end (`keepUnmatched`). */
+	preserved: number;
 }
 
 /**
  * Re-attach review history from `oldBlock` to the matching cards in `newBlock`.
  * Both are full managed blocks (start marker to end marker). Lines that are not cards are left alone.
+ * With `keepUnmatched`, reviewed cards that have no match in the new block are copied, with their
+ * history, to the end of the new block instead of being removed.
  */
-export function carryHistory(oldBlock: string | null, newBlock: string): CarryResult {
-	if (!oldBlock) return { block: newBlock, kept: 0, dropped: 0 };
+export function carryHistory(oldBlock: string | null, newBlock: string, keepUnmatched = false): CarryResult {
+	if (!oldBlock) return { block: newBlock, kept: 0, dropped: 0, preserved: 0 };
 	// cards with a schedule, or with a block id that other notes may link to
-	const oldEntries = scan(oldBlock.replace(/\r\n?/g, "\n").split("\n")).filter((e) => e.history !== null);
-	if (!oldEntries.length) return { block: newBlock, kept: 0, dropped: 0 };
+	const oldLines = oldBlock.replace(/\r\n?/g, "\n").split("\n");
+	const oldEntries = scan(oldLines).filter((e) => e.history !== null);
+	if (!oldEntries.length) return { block: newBlock, kept: 0, dropped: 0, preserved: 0 };
 	const lines = newBlock.split("\n");
 	const fresh = scan(lines);
 	const used = new Set<Entry>();
@@ -174,11 +183,24 @@ export function carryHistory(oldBlock: string | null, newBlock: string): CarryRe
 		const h = o.history!;
 		let lastLine = (lines[n.last] ?? "").trimEnd();
 		if (h.sameLine) lastLine += h.sameLine.startsWith(" ") ? h.sameLine : ` ${h.sameLine}`;
-		else if (h.blockId) lastLine += ` ${h.blockId}`;
+		else if (h.blockId && !lastLine.endsWith(` ${h.blockId}`)) lastLine += ` ${h.blockId}`;
 		lines[n.last] = lastLine;
 		if (h.lines.length) lines.splice(n.last + 1, 0, ...h.lines);
 	}
 	const kept = [...matches.values()].filter((o) => hasHistory(o.history)).length;
-	const dropped = oldEntries.filter((o) => !used.has(o) && hasHistory(o.history)).length;
-	return { block: lines.join("\n"), kept, dropped };
+	const unmatched = oldEntries.filter((o) => !used.has(o) && hasHistory(o.history));
+	if (keepUnmatched && unmatched.length) {
+		let at = lines.length;
+		for (let i = lines.length - 1; i >= 0; i--) {
+			if ((lines[i] ?? "").trim().startsWith("%% cardsmith:end")) {
+				at = i;
+				break;
+			}
+		}
+		const extra: string[] = [];
+		for (const o of unmatched) extra.push("", ...oldLines.slice(o.first, o.end + 1));
+		lines.splice(at, 0, ...extra);
+		return { block: lines.join("\n"), kept, dropped: 0, preserved: unmatched.length };
+	}
+	return { block: lines.join("\n"), kept, dropped: unmatched.length, preserved: 0 };
 }

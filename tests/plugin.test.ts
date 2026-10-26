@@ -82,10 +82,10 @@ describe("plugin with mocked Obsidian", () => {
 			expect(vault.files.get("Course/Note6.md")).not.toContain("cardsmith:start");
 			const n1 = vault.files.get("Course/Note1.md")!;
 			expect(n1).toContain("What is the basic unit of life?::The cell\n<!--SR:!2026-11-02,7,250-->");
-			expect(n1).not.toContain("Old card?");
-			expect(n1).not.toContain("2026-11-03");
+			// a reviewed card that is not in the new set is kept, never removed unseen
+			expect(n1).toContain("Old card?::Old\n<!--SR:!2026-11-03,8,250-->\n%% cardsmith:end %%");
 			expect(n1).toContain("Every ==organism== is made of cells."); // cloze on free
-			expect(notices.some((m) => /made 10 cards from 5 notes\. Kept review history for 1 card; 1 removed card lost its\./.test(m))).toBe(true);
+			expect(notices.some((m) => /made 10 cards from 5 notes\. Kept review history for 1 card\. 1 reviewed card was not in the new set and stays at the end of the cards/.test(m))).toBe(true);
 			expect(notices.at(-1)).toMatch(/free folder run/);
 			expect(p.settings.freeFolderRunUsed).toBe(true);
 			// a second free run does nothing
@@ -93,6 +93,37 @@ describe("plugin with mocked Obsidian", () => {
 			await gen(folder, 5);
 			expect(requestLog.length).toBe(before);
 			expect(vault.files.get("Course/Note6.md")).not.toContain("cardsmith:start");
+		} finally {
+			mockReply.fn = null;
+		}
+	});
+	it("editor run with the review window off keeps reviewed cards that are not in the new set; long notes say the rest is not included", async () => {
+		const { app } = makeApp();
+		const p = new CardsmithPlugin(app as never, {} as never);
+		await p.onload();
+		p.settings.kind = "ollama";
+		p.settings.baseUrl = "http://localhost:11434";
+		p.settings.reviewBeforeInsert = false;
+		const long = " Mitochondria make ATP for the cell.".repeat(800); // > 24,000 characters
+		let text = `# Mito${long}\n\n%% cardsmith:start hash=00000000 %%\n#flashcards\n\nWhat do mitochondria make?::ATP\n<!--SR:!2026-11-02,7,250-->\n\nOld?::Old\n<!--SR:!2026-11-03,8,250-->\n%% cardsmith:end %%\n`;
+		const editor = {
+			getSelection: () => "",
+			getValue: () => text,
+			offsetToPos: (o: number) => o,
+			replaceRange: (r: string, from: number, to?: number) => {
+				text = text.slice(0, from) + r + text.slice(to ?? from);
+			},
+		};
+		mockReply.fn = () => ({ message: { content: JSON.stringify({ cards: [{ type: "basic", front: "What do mitochondria make?", back: "ATP" }, { type: "basic", front: "Where is ATP made?", back: "In mitochondria" }] }) } });
+		try {
+			const run = (p as unknown as { generateForEditor: (e: unknown, f: TFile) => Promise<void> }).generateForEditor.bind(p);
+			await run(editor, new TFile("Mito.md"));
+			expect(text).toContain("What do mitochondria make?::ATP\n<!--SR:!2026-11-02,7,250-->");
+			expect(text).toContain("Where is ATP made?::In mitochondria");
+			expect(text).toContain("Old?::Old\n<!--SR:!2026-11-03,8,250-->\n%% cardsmith:end %%");
+			expect(notices.some((m) => /only the first 24,000 were used\. Cards for the rest aren't included\.$/.test(m))).toBe(true);
+			expect(notices.some((m) => /Select the rest/.test(m))).toBe(false);
+			expect(notices.some((m) => /^Added 2 cards\. Kept review history for 1 card\. 1 reviewed card was not in the new set and stays at the end of the cards, with its review history\./.test(m))).toBe(true);
 		} finally {
 			mockReply.fn = null;
 		}

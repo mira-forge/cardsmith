@@ -29,6 +29,11 @@ const obsidianHttp: HttpFn = async (req) => {
 };
 
 /** Cards with a Spaced Repetition schedule in the note's Cardsmith block. */
+/** Notice text for reviewed cards that the new set did not include and that were left in place. */
+function preservedText(n: number): string {
+	return `${plural(n, "reviewed card")} ${n === 1 ? "was" : "were"} not in the new set and ${n === 1 ? "stays" : "stay"} at the end of the cards, with ${n === 1 ? "its" : "their"} review history. Delete ${n === 1 ? "it" : "them"} by hand if you no longer want ${n === 1 ? "it" : "them"}.`;
+}
+
 function historyCount(note: string): number {
 	const b = findBlock(note);
 	return b ? (note.slice(b.start, b.end).match(/<!--SR:/g) ?? []).length : 0;
@@ -183,7 +188,7 @@ export default class CardsmithPlugin extends Plugin {
 		this.busy = false;
 		if (truncated) {
 			new Notice(
-				`This ${selection.trim() ? "selection" : "note"} is longer than ${MAX_INPUT_CHARS.toLocaleString("en-US")} characters, so only the first ${MAX_INPUT_CHARS.toLocaleString("en-US")} were used. Select the rest and run Cardsmith again to cover it.`,
+				`This ${selection.trim() ? "selection" : "note"} is longer than ${MAX_INPUT_CHARS.toLocaleString("en-US")} characters, so only the first ${MAX_INPUT_CHARS.toLocaleString("en-US")} were used. Cards for the rest aren't included.`,
 				12000,
 			);
 		}
@@ -191,12 +196,14 @@ export default class CardsmithPlugin extends Plugin {
 			new Notice("The model did not return any usable cards. Try a longer section or another model.");
 			return;
 		}
+		// Without the review window the user never sees which reviewed cards would go, so keep them.
+		const keepReviewed = !this.settings.reviewBeforeInsert;
 		const write = (chosen: Card[]) => {
 			const current = editor.getValue();
 			const fresh = buildBlock(chosen, this.settings.deckTag, hashText(stripBlock(current)));
 			const existing = findBlock(current);
 			// keep Spaced Repetition review history for cards that are still there
-			const { block, kept, dropped } = mergeBlock(current, fresh);
+			const { block, kept, dropped, preserved } = mergeBlock(current, fresh, keepReviewed);
 			if (existing) {
 				editor.replaceRange(block, editor.offsetToPos(existing.start), editor.offsetToPos(existing.end));
 			} else {
@@ -206,7 +213,8 @@ export default class CardsmithPlugin extends Plugin {
 			}
 			const history = kept || dropped ? ` Kept review history for ${plural(kept, "card")}.` : "";
 			const lost = dropped ? ` ${plural(dropped, "card")} with review history ${dropped === 1 ? "was" : "were"} removed, so ${dropped === 1 ? "its" : "their"} history is gone.` : "";
-			new Notice(`Added ${plural(chosen.length, "card")}.${history}${lost}`, dropped ? 10000 : 5000);
+			const old = preserved ? ` ${preservedText(preserved)}` : "";
+			new Notice(`Added ${plural(chosen.length, "card")}.${history}${lost}${old}`, dropped || preserved ? 10000 : 5000);
 		};
 		if (this.settings.reviewBeforeInsert) new ReviewModal(this.app, cards, file.basename, write, historyCount(full)).open();
 		else write(cards);
@@ -235,7 +243,7 @@ export default class CardsmithPlugin extends Plugin {
 		let notesDone = 0;
 		let skipped = 0;
 		let kept = 0;
-		let dropped = 0;
+		let preserved = 0;
 		let cut = 0;
 		const failed: string[] = [];
 		for (let i = 0; i < files.length; i++) {
@@ -258,10 +266,11 @@ export default class CardsmithPlugin extends Plugin {
 				}
 				await this.app.vault.process(file, (data) => {
 					const fresh = buildBlock(cards, this.settings.deckTag, hashText(stripBlock(data)));
-					const r = mergeBlock(data, fresh);
+					// nobody reviews folder runs card by card, so reviewed cards are never removed here
+					const r = mergeBlock(data, fresh, true);
 					kept += r.kept;
-					dropped += r.dropped;
-					return upsertBlock(data, fresh);
+					preserved += r.preserved;
+					return upsertBlock(data, fresh, true);
 				});
 				made += cards.length;
 				notesDone++;
@@ -277,9 +286,10 @@ export default class CardsmithPlugin extends Plugin {
 		this.busy = false;
 		const tail = failed.length ? ` ${failed.length} failed: ${failed.slice(0, 3).join(", ")}${failed.length > 3 ? "…" : ""}.` : "";
 		const skip = skipped ? ` ${plural(skipped, "note")} ${skipped === 1 ? "was" : "were"} already up to date or too short.` : "";
-		const hist = kept || dropped ? ` Kept review history for ${plural(kept, "card")}${dropped ? `; ${plural(dropped, "removed card")} lost ${dropped === 1 ? "its" : "theirs"}` : ""}.` : "";
+		const hist = kept ? ` Kept review history for ${plural(kept, "card")}.` : "";
+		const old = preserved ? ` ${preservedText(preserved)}` : "";
 		const long = cut ? ` ${plural(cut, "note")} ${cut === 1 ? "was" : "were"} longer than ${MAX_INPUT_CHARS.toLocaleString("en-US")} characters; only the first ${MAX_INPUT_CHARS.toLocaleString("en-US")} were used.` : "";
-		new Notice(`Cardsmith made ${plural(made, "card")} from ${plural(notesDone, "note")}.${skip}${hist}${long}${tail}`, 10000);
+		new Notice(`Cardsmith made ${plural(made, "card")} from ${plural(notesDone, "note")}.${skip}${hist}${old}${long}${tail}`, 10000);
 		if (freeLimit && notesDone > 0) {
 			this.settings.freeFolderRunUsed = true;
 			await this.saveSettings();
