@@ -1,12 +1,12 @@
 # Changelog
 
-## 0.1.6 (draft, not released)
+## 0.1.6 (2026-10-26)
 
 - **Synced folders (Pro).** Pick folders once in Settings → Cardsmith → Synced folders. When Obsidian starts, Cardsmith counts the notes in them that changed since their cards were made or have no cards yet, and shows the count in the status bar ("7 notes have new content"). Select it, or run **Refresh notes with new content in synced folders**, to make cards for all of those notes and review them in one window. You can edit or untick cards, or untick a whole note. Nothing is saved until you select **Approve**, and **Cancel** saves nothing. **Check synced folders for notes with new content** checks again at any time.
 - **Refreshes never remove reviewed cards.** A synced-folder refresh uses the same review-history logic as 0.1.5 folder runs: cards that keep their question keep their Spaced Repetition comment, and a reviewed card that is not in the new set stays at the end of the cards with its history. The batch window lists those cards by question.
 - **The review window lists reviewed cards it would remove.** When you run a single note again with the review window on, the window now shows the questions of the reviewed cards that are not in the new set and would lose their review history if you insert. The list updates as you tick, untick or edit cards.
 - **Cheap startup check.** Only the folders you added are listed; the rest of the vault isn't. Cardsmith keeps each note's modified time, size and card state in its `data.json` and opens a note only if its modified time or size changed since the last check. The check sends nothing over the network.
-- **Free plan:** the synced-folder commands open the Pro screen, where **Try on 5 notes** runs one reviewed batch on up to 5 notes from a folder you pick. It shares the one free folder run per vault with **Generate flashcards for every note in a folder**, and counts as used only once you approve at least one note.
+- **Free plan:** the synced-folder commands open the Pro screen, where **Try on 5 notes** runs one reviewed batch on up to 5 notes from a folder you pick. It shares the one free folder run per vault with **Generate flashcards for every note in a folder**, and counts as used only once you approve at least one note. It uses the AI provider you picked (your own key or Ollama). After that run, the folder and synced-folder commands need Pro.
 - On Obsidian mobile the status bar isn't shown; use the two commands.
 - No changes to pricing, the license service or network use.
 

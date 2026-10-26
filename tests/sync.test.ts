@@ -471,6 +471,21 @@ describe("free vs Pro", () => {
 		expect(buttons(lastModal(ProModal)!).some((b) => /Try on/.test(b.text))).toBe(false);
 	});
 
+	it("free: the 5-note try runs on the user's own provider (here Ollama) and contacts nothing else", async () => {
+		const { vault, p } = await freeVault();
+		p.settings.kind = "ollama";
+		p.settings.baseUrl = "http://localhost:11434";
+		requestLog.length = 0;
+		await p.refreshSynced({ folder: vault.getFolderByPath("Course")!, limit: 5 });
+		expect(requestLog).toHaveLength(5);
+		for (const r of requestLog as { url: string }[]) expect(r.url.startsWith("http://localhost:11434/")).toBe(true);
+		expect((requestLog as { url: string }[]).some((r) => /workers\.dev|miraforge|openrouter/.test(r.url))).toBe(false);
+		button(lastModal(SyncReviewModal)!, /^Approve/).click();
+		await flush();
+		expect(p.settings.freeFolderRunUsed).toBe(true);
+		expect(requestLog).toHaveLength(5);
+	});
+
 	it("free: cancelling the free run writes nothing and does not use it up", async () => {
 		const { vault, p } = await freeVault(3);
 		await p.refreshSynced({ folder: vault.getFolderByPath("Course")!, limit: 5 });

@@ -1,6 +1,6 @@
 {
 	"name": "cardsmith",
-	"version": "0.1.5",
+	"version": "0.1.6",
 	"description": "Turn your notes into spaced-repetition flashcards with your own AI key or a local model.",
 	"main": "main.js",
 	"type": "module",

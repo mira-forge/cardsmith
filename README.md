@@ -70,7 +70,7 @@ Spaced Repetition saves each card's schedule as a `<!--SR:...-->` comment right 
 
 The status bar isn't shown on Obsidian mobile; use the two commands there. The count is updated when Obsidian starts, when you run the check command, and after a refresh, not while you type.
 
-On the free plan, the synced-folder commands open the Pro screen, where **Try on 5 notes** runs one reviewed batch on up to 5 notes from a folder you pick. It uses the same one free folder run per vault as **Generate flashcards for every note in a folder**, and it counts as used only once you approve at least one note.
+On the free plan, the synced-folder commands open the Pro screen, where **Try on 5 notes** runs one reviewed batch on up to 5 notes from a folder you pick. It uses the same one free folder run per vault as **Generate flashcards for every note in a folder**, and it counts as used only once you approve at least one note. It runs on the AI provider you picked in settings (your own key or Ollama). After that one run, the folder and synced-folder commands need Pro; single notes stay free.
 
 ### Card syntax written
 
