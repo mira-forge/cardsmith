@@ -3,6 +3,8 @@
  * Pure functions only: no Obsidian imports, so everything here is unit-tested.
  */
 
+import { carryHistory, type CarryResult } from "./history";
+
 export type CardType = "basic" | "reversed" | "cloze";
 
 export interface Card {
@@ -98,14 +100,26 @@ function inline(s: string): string {
 }
 
 /**
+ * The Spaced Repetition plugin ends a multi-line card at the first empty line, so blank lines
+ * inside a card would cut it short. Collapse them, and drop lines that are exactly `?` or `??`.
+ */
+function noBlankLines(s: string): string {
+	return s
+		.split("\n")
+		.map((l) => l.trimEnd())
+		.filter((l) => l.trim() !== "" && l.trim() !== "?" && l.trim() !== "??")
+		.join("\n");
+}
+
+/**
  * Format one card in the Spaced Repetition plugin syntax:
  * basic `Q::A`, reversed `Q:::A`, multi-line `Q\n?\nA` / `Q\n??\nA`, cloze as a ==highlighted== line.
  */
 export function formatCard(card: Card): string {
-	if (card.type === "cloze") return card.front.replace(/\n+/g, " ");
+	if (card.type === "cloze") return card.front.replace(/\s*\n\s*/g, " ");
 	if (isMultiline(card)) {
 		const sep = card.type === "reversed" ? "??" : "?";
-		return `${card.front}\n${sep}\n${card.back}`;
+		return `${noBlankLines(card.front)}\n${sep}\n${noBlankLines(card.back)}`;
 	}
 	const sep = card.type === "reversed" ? ":::" : "::";
 	return `${inline(card.front)}${sep}${inline(card.back)}`;
@@ -142,10 +156,19 @@ export function stripBlock(note: string): string {
 	return (note.slice(0, b.start) + note.slice(b.end)).replace(/\n{3,}/g, "\n\n").trimEnd();
 }
 
-/** Replace the managed block, or append it at the end of the note. */
+/**
+ * The new block for a note, with Spaced Repetition review history carried over from the
+ * note's current block for every card that is still there.
+ */
+export function mergeBlock(note: string, block: string): CarryResult {
+	const b = findBlock(note);
+	return carryHistory(b ? note.slice(b.start, b.end) : null, block);
+}
+
+/** Replace the managed block (keeping review history of cards that stay), or append it at the end of the note. */
 export function upsertBlock(note: string, block: string): string {
 	const b = findBlock(note);
-	if (b) return note.slice(0, b.start) + block + note.slice(b.end);
+	if (b) return note.slice(0, b.start) + mergeBlock(note, block).block + note.slice(b.end);
 	const base = note.replace(/\s+$/, "");
 	return `${base}${base ? "\n\n" : ""}${block}\n`;
 }

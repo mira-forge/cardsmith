@@ -22,6 +22,8 @@ export interface CardsmithSettings {
 	reviewBeforeInsert: boolean;
 	exportFolder: string;
 	license: StoredLicense | null;
+	/** Set once the one free folder run (up to 5 notes) has been used in this vault. */
+	freeFolderRunUsed: boolean;
 }
 
 export const DEFAULT_SETTINGS: CardsmithSettings = {
@@ -40,6 +42,7 @@ export const DEFAULT_SETTINGS: CardsmithSettings = {
 	reviewBeforeInsert: true,
 	exportFolder: "Cardsmith exports",
 	license: null,
+	freeFolderRunUsed: false,
 };
 
 /**
@@ -247,24 +250,25 @@ export class CardsmithSettingTab extends PluginSettingTab {
 			},
 		];
 
-		const proToggle = (name: string, desc: string, aliases: string[], get: () => boolean, set: (v: boolean) => void): Row => ({
+		const toggle = (name: string, desc: string, aliases: string[], get: () => boolean, set: (v: boolean) => void): Row => ({
 			name,
-			desc: pro ? desc : `${desc} Requires Pro.`,
+			desc,
 			aliases,
 			build: (st) =>
 				st.addToggle((t) =>
-					t
-						.setValue(pro && get())
-						.setDisabled(!pro)
-						.onChange(async (v) => {
-							set(v);
-							await save();
-						}),
+					t.setValue(get()).onChange(async (v) => {
+						set(v);
+						await save();
+					}),
 				),
 		});
+		cards.splice(
+			2,
+			0,
+			toggle("Reversed cards", "Term and definition cards you review both ways.", ["reverse", "both ways"], () => s.useReversed, (v) => (s.useReversed = v)),
+			toggle("Cloze cards", "Fill-in-the-blank cards using ==highlights==.", ["cloze", "fill in the blank", "highlights"], () => s.useCloze, (v) => (s.useCloze = v)),
+		);
 		const proRows: Row[] = [
-			proToggle("Reversed cards", "Term and definition cards you review both ways.", ["reverse", "both ways"], () => s.useReversed, (v) => (s.useReversed = v)),
-			proToggle("Cloze cards", "Fill-in-the-blank cards using ==highlights==.", ["cloze", "fill in the blank", "highlights"], () => s.useCloze, (v) => (s.useCloze = v)),
 			{
 				name: "Custom instructions",
 				desc: pro ? "Extra guidance for the model, for example exam style or level." : "Requires Pro.",
@@ -332,7 +336,9 @@ export class CardsmithSettingTab extends PluginSettingTab {
 					row.settingEl.addClass("cardsmith-pro-box");
 					const box = row.descEl;
 					box.empty();
-					box.createEl("p", { text: "A Pro license unlocks:" });
+					box.createEl("p", {
+						text: lic.salesOpen() ? "Pro is $3/month, tax included. Cancel anytime; your cards stay in your notes. Pro adds:" : "Pro adds:",
+					});
 					const ul = box.createEl("ul");
 					for (const f of Object.values(PRO_FEATURES)) ul.createEl("li", { text: f });
 					if (st.message) box.createEl("p", { cls: "cardsmith-muted", text: st.message });

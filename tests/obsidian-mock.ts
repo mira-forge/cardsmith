@@ -8,7 +8,13 @@ export class Notice {
 export const Platform = { isMobile: false, isDesktop: true };
 export function normalizePath(p: string) { return p.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\/|\/$/g, ""); }
 export const requestLog: unknown[] = [];
-export async function requestUrl(req: unknown) { requestLog.push(req); return { status: 599, json: null, text: "" }; }
+/** Tests can set `mockReply.fn` to answer requests (e.g. a fake local model). */
+export const mockReply: { fn: ((req: any) => unknown) | null } = { fn: null };
+export async function requestUrl(req: unknown) {
+	requestLog.push(req);
+	if (mockReply.fn) { const json = mockReply.fn(req); return { status: 200, json, text: JSON.stringify(json) }; }
+	return { status: 599, json: null, text: "" };
+}
 
 export class TAbstractFile {}
 export class TFolder extends TAbstractFile {

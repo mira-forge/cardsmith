@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.5 (2026-10-26)
+
+- **Fix: re-running Cardsmith no longer erases Spaced Repetition review history.** The Spaced Repetition plugin saves each card's schedule as a `<!--SR:...-->` comment right after the card. Up to 0.1.4, generating cards again for a note, or a Pro folder refresh, replaced the whole Cardsmith block and dropped those comments, so reviewed cards started over. Now every card that keeps its question gets its comment back, right after it. Matching ignores case and spacing; if only the answer changed, the card still keeps its history. Cards that are no longer in the block lose theirs, and the notice says how many. Same-line comments, `> [!sr|card-metadata]` callouts and block ids (`^id`) are kept too. The review window warns before you insert when the note has reviewed cards.
+- **Cloze and reversed cards are now free.** Turn them on in Settings → Cardsmith. Free still makes up to 10 cards per note.
+- **One free folder run per vault.** Free users can run **Generate flashcards for every note in a folder** once, on up to 5 notes, from the Pro screen. A setting in the plugin's `data.json` remembers that it was used. Nothing is sent anywhere.
+- **Clearer Pro screen.** It starts with what you were trying to do and what Pro does for it, then the price: $3/month, tax included, cancel anytime, and your cards stay in your notes. It also states the refund policy: full refund of the first payment if you ask within 14 days, no questions asked.
+- **Long notes:** when a note or selection is longer than 24,000 characters, Cardsmith now tells you that only the first 24,000 were used, instead of cutting it silently.
+- **Multi-line cards** are written without blank lines inside them, because Spaced Repetition ends a card at the first blank line. Multi-line cloze text is joined into one line.
+- Notices and the review window say "1 card" instead of "1 cards".
+- No changes to pricing, the license service or network use.
+
 ## 0.1.4 (2026-10-26)
 
 - **Polar code removed.** The old Polar payment code and its checkout link are gone. Pro is sold only through Stripe (Link); the plugin contacts only your AI provider and, if you enter a key, the Cardsmith license service.

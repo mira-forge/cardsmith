@@ -9,7 +9,7 @@ export interface PromptOptions {
 
 export const MAX_INPUT_CHARS = 24000;
 
-export function buildMessages(noteTitle: string, noteText: string, o: PromptOptions): { system: string; user: string } {
+export function buildMessages(noteTitle: string, noteText: string, o: PromptOptions): { system: string; user: string; truncated: boolean } {
 	const typeLines: string[] = [];
 	if (o.types.includes("basic")) typeLines.push('- "basic": a question on "front" and a short answer on "back".');
 	if (o.types.includes("reversed"))
@@ -29,7 +29,8 @@ export function buildMessages(noteTitle: string, noteText: string, o: PromptOpti
 	]
 		.filter(Boolean)
 		.join("\n\n");
-	const text = noteText.length > MAX_INPUT_CHARS ? noteText.slice(0, MAX_INPUT_CHARS) + "\n[truncated]" : noteText;
+	const truncated = noteText.length > MAX_INPUT_CHARS;
+	const text = truncated ? noteText.slice(0, MAX_INPUT_CHARS) + "\n[truncated]" : noteText;
 	const user = `Note title: ${noteTitle}\n\nNote:\n"""\n${text}\n"""`;
-	return { system, user };
+	return { system, user, truncated };
 }

@@ -10,19 +10,23 @@
 
 **Install from Obsidian:** Settings → Community plugins → Browse, search for “Cardsmith”, select **Install**, then **Enable**. Listing: https://community.obsidian.md/plugins/cardsmith
 
-Free covers single notes (up to 10 cards each) with your own AI key or Ollama, including Anki export of that note; Pro is $3/month (tax included, cancel anytime) and adds whole folders, cloze and reversed cards, vault-wide Anki export, custom instructions and up to 50 cards per note. Cardsmith connects only to the AI provider you pick and, if you add Pro, our license service; see [Disclosures](#disclosures).
+Free covers single notes (up to 10 cards each, cloze and reversed cards included) with your own AI key or Ollama, Anki export of that note, and one free folder run of up to 5 notes per vault. Pro is $3/month (tax included, cancel anytime) and adds whole folders, refreshing only the notes that changed, folder and vault Anki export, custom instructions and up to 50 cards per note. Cardsmith connects only to the AI provider you pick and, if you add Pro, our license service; see [Disclosures](#disclosures).
 
 ## Features
 
 - **Cards from the note you are reading.** Run one command (or select the layers icon) on a note or a selection.
 - **You approve every card.** A review window lets you edit, untick or keep each card. Nothing touches your note until you select **Insert**.
 - **Your AI, your account.** OpenAI, Anthropic, OpenRouter, any OpenAI-compatible endpoint, or **Ollama on your own computer**, so nothing leaves your machine.
-- **Your note stays yours.** Cards go into one clearly marked block at the end of the note. Running it again replaces only that block.
+- **Your note stays yours.** Cards go into one clearly marked block at the end of the note. Running it again replaces only that block, and a card that keeps its question keeps its Spaced Repetition review history.
 - **Anki export, offline.** Export a note's cards, including ones you wrote by hand, to an Anki import file. No AI and no network needed.
 
 ## Works with Spaced Repetition and Anki
 
 Cardsmith doesn't replace your review tool; it fills it. Cards are written in the format used by the [Spaced Repetition](https://github.com/st3v3nmw/obsidian-spaced-repetition) plugin, so you keep reviewing in Obsidian exactly as you do now. Prefer Anki? Export the same cards to an Anki import file.
+
+Cards stay plain text in your notes, ready for Spaced Repetition, and export to Anki offline in one command. No database, nothing to sync.
+
+Spaced Repetition saves each card's schedule as a `<!--SR:...-->` comment right after the card. When Cardsmith rewrites its block (running a note again, or a Pro folder refresh), every card that keeps its question gets that comment back, so its review history stays. Cards that are no longer in the block lose theirs, and Cardsmith tells you how many. (Versions before 0.1.5 dropped these comments on a re-run.)
 
 ## How to use
 
@@ -52,7 +56,7 @@ Cardsmith doesn't replace your review tool; it fills it. Cards are written in th
 
    ![Cards saved at the end of the note](docs/step-4-cards-in-note.png)
 
-   Running it again replaces that block; the rest of your note is never touched.
+   Running it again replaces that block and keeps the review history of cards that keep their question; the rest of your note is never touched.
 
 5. **Or export to Anki.** Run **Export this note's flashcards to Anki** and import the `.txt` file in Anki with **File → Import**. Note type, deck and tags are set automatically (Anki 2.1.55 or later).
 
@@ -60,7 +64,7 @@ Cardsmith doesn't replace your review tool; it fills it. Cards are written in th
 
 ### Card syntax written
 
-`Question::Answer` (basic), `Term:::Definition` (reversed), multi-line cards separated by `?` or `??`, and cloze cards using `==highlights==`, all as described in the Spaced Repetition plugin's documentation. The deck tag (default `#flashcards`) is configurable.
+`Question::Answer` (basic), `Term:::Definition` (reversed), multi-line cards separated by `?` or `??`, and cloze cards using `==highlights==`, all as described in the Spaced Repetition plugin's documentation. Multi-line cards are written without blank lines inside them, because Spaced Repetition ends a card at the first blank line. The deck tag (default `#flashcards`) is configurable.
 
 ## Install
 
@@ -79,23 +83,26 @@ Every release is built by GitHub Actions with a signed build provenance attestat
 
 ## Free and Pro
 
-Free covers single notes (up to 10 cards each) with your own AI key or Ollama, including Anki export of that note; Pro is $3/month (tax included, cancel anytime) and adds whole folders, cloze and reversed cards, vault-wide Anki export, custom instructions and up to 50 cards per note.
+Free covers single notes (up to 10 cards each, cloze and reversed cards included) with your own AI key or Ollama, Anki export of that note, and one free folder run of up to 5 notes per vault. Pro is $3/month (tax included, cancel anytime) and adds whole folders, refreshing only the notes that changed, folder and vault Anki export, custom instructions and up to 50 cards per note.
 
 | | Free | Pro |
 |---|---|---|
 | Generate cards from the current note or a selection | ✓ | ✓ |
 | Review, edit and drop cards before they are saved | ✓ | ✓ |
 | Basic question/answer cards | ✓ | ✓ |
+| Cloze and reversed cards | ✓ | ✓ |
 | Cards per note | up to 10 | up to 50 |
+| Keep Spaced Repetition review history when cards are rewritten | ✓ | ✓ |
 | Export a note's cards to Anki (offline) | ✓ | ✓ |
 | Ollama, OpenAI, Anthropic, OpenRouter, custom endpoints | ✓ | ✓ |
-| Cloze and reversed cards | | ✓ |
-| Generate for a whole folder in one run | | ✓ |
+| Generate for a folder in one run | once per vault, up to 5 notes | ✓ any size, any number of times |
 | Refresh only notes that changed since their cards were made | | ✓ |
 | Export a folder or the whole vault to Anki, with decks from folders | | ✓ |
 | Custom instructions for the model | | ✓ |
 
-If your subscription ends, Pro features switch off and your existing cards stay exactly where they are. If you are offline, Pro keeps working for 7 days after the last successful license check.
+The free folder run is remembered by one setting in Cardsmith's `data.json` in this vault; nothing is sent anywhere.
+
+First payment: full refund if you ask within 14 days, no questions asked ([refund policy](https://miraforge-site.pages.dev/refunds/)). If your subscription ends, Pro features switch off and your existing cards stay exactly where they are. If you are offline, Pro keeps working for 7 days after the last successful license check.
 
 ## Pro license
 
@@ -111,7 +118,7 @@ Cardsmith never scans your whole vault on its own.
 
 - **This note or selection:** reads only the active note.
 - **Export this note to Anki:** reads only the active note and its tags from Obsidian's metadata cache.
-- **Generate or export a folder (Pro):** lists Markdown notes only inside the folder you choose, by walking that folder's children (subfolders included). Files outside it are not listed or read.
+- **Generate or export a folder (Pro, or the one free folder run):** lists Markdown notes only inside the folder you choose, by walking that folder's children (subfolders included). Files outside it are not listed or read.
 - **When the whole vault is involved:** only if you pick **/ (whole vault)** in the folder picker. Then every note except those in the Anki export folder is in scope, because that is what you asked for. The folder picker itself lists folder names (not files or contents) so you can choose one.
 
 ## Disclosures
@@ -124,7 +131,7 @@ Cardsmith never scans your whole vault on its own.
   Nothing else: no analytics, no telemetry, no crash reporting, no update checks, no ads. (**Get a license** opens Stripe's checkout page in your web browser. The plugin itself sends nothing when you click it.)
 - **Your API key stays on your device.** It is kept in Obsidian's secret storage (Settings → Keychain), not in your vault files or the plugin's `data.json`.
 - **Files.** Cardsmith only writes inside your vault: the card block in the note you chose, and Anki export files in a folder you pick (default `Cardsmith exports/`).
-- **Which notes Cardsmith reads.** Generating cards reads only the open note (or your selection). The folder commands (Pro) read only the notes inside the folder you pick, found by walking that folder and its subfolders; nothing outside it is listed or opened, and the Anki export folder is skipped. See **Vault access** below.
+- **Which notes Cardsmith reads.** Generating cards reads only the open note (or your selection). The folder commands (Pro, and the one free folder run) read only the notes inside the folder you pick, found by walking that folder and its subfolders; nothing outside it is listed or opened, and the Anki export folder is skipped. See **Vault access** below.
 - **Made by AI agents.** Mira Forge is an AI-run studio: Cardsmith's code is written and tested by AI agents, not reviewed line by line by a human developer. Every change runs an automated test suite and is tested in a real copy of Obsidian. The source is public, readable and unminified; see `src/`.
 
 ## Development

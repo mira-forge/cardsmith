@@ -1,10 +1,10 @@
 import { MarkdownView, Notice, Plugin, TFile, TFolder, normalizePath, requestUrl, type Editor } from "obsidian";
 import { CardsmithSettingTab, DEFAULT_SETTINGS, type CardsmithSettings } from "./settings";
 import { complete, type HttpFn, type ModelConfig } from "./ai/providers";
-import { buildBlock, findBlock, hashText, parseCards, stripBlock, upsertBlock, type Card } from "./core/cards";
-import { buildMessages } from "./core/prompt";
+import { buildBlock, findBlock, hashText, mergeBlock, parseCards, stripBlock, upsertBlock, type Card } from "./core/cards";
+import { buildMessages, MAX_INPUT_CHARS } from "./core/prompt";
 import { markdownUnder } from "./core/scope";
-import { allowedTypes, cardCap, PRO_FEATURES, type ProFeature } from "./core/features";
+import { allowedTypes, cardCap, FREE_FOLDER_RUN_NOTES, plural, type ProFeature } from "./core/features";
 import { deckFromPath, parseSrCards, toAnkiTsv, type ExportCard } from "./core/anki";
 import { LicenseManager } from "./license/manager";
 import { ServerLicenseProvider } from "./license/server-provider";
@@ -27,6 +27,12 @@ const obsidianHttp: HttpFn = async (req) => {
 	}
 	return { status: res.status, json, text: typeof res.text === "string" ? res.text : "" };
 };
+
+/** Cards with a Spaced Repetition schedule in the note's Cardsmith block. */
+function historyCount(note: string): number {
+	const b = findBlock(note);
+	return b ? (note.slice(b.start, b.end).match(/<!--SR:/g) ?? []).length : 0;
+}
 
 export default class CardsmithPlugin extends Plugin {
 	settings: CardsmithSettings = { ...DEFAULT_SETTINGS };
@@ -82,7 +88,12 @@ export default class CardsmithPlugin extends Plugin {
 		this.addCommand({
 			id: "generate-folder",
 			name: "Generate flashcards for every note in a folder",
-			callback: () => this.requirePro("batchFolder", () => new FolderSuggestModal(this.app, (f) => void this.generateFolder(f)).open()),
+			callback: () =>
+				this.requirePro(
+					"batchFolder",
+					() => new FolderSuggestModal(this.app, (f) => void this.generateFolder(f)).open(),
+					this.settings.freeFolderRunUsed ? undefined : () => new FolderSuggestModal(this.app, (f) => void this.generateFolder(f, FREE_FOLDER_RUN_NOTES)).open(),
+				),
 		});
 		this.addCommand({
 			id: "export-folder-anki",
@@ -121,9 +132,9 @@ export default class CardsmithPlugin extends Plugin {
 		}
 	}
 
-	private requirePro(feature: ProFeature, run: () => void): void {
+	private requirePro(feature: ProFeature, run: () => void, tryFree?: () => void): void {
 		if (this.license.isPro()) run();
-		else new ProModal(this.app, PRO_FEATURES[feature], this.license.salesOpen(), () => new KeyModal(this.app, (k) => this.activateLicense(k)).open()).open();
+		else new ProModal(this.app, feature, this.license.salesOpen(), () => new KeyModal(this.app, (k) => this.activateLicense(k)).open(), tryFree).open();
 	}
 
 	private modelConfig(): ModelConfig {
@@ -132,19 +143,19 @@ export default class CardsmithPlugin extends Plugin {
 		return { kind: s.kind, baseUrl: s.baseUrl, model: s.model, apiKey, temperature: s.temperature };
 	}
 
-	/** Ask the model for cards for one piece of text. */
-	private async makeCards(title: string, text: string): Promise<Card[]> {
+	/** Ask the model for cards for one piece of text. `truncated` is set when only the first part of a long note was sent. */
+	private async makeCards(title: string, text: string): Promise<{ cards: Card[]; truncated: boolean }> {
 		const pro = this.license.isPro();
 		const types = allowedTypes(pro, { reversed: this.settings.useReversed, cloze: this.settings.useCloze });
 		const max = cardCap(pro, this.settings.maxCards);
-		const { system, user } = buildMessages(title, text, {
+		const { system, user, truncated } = buildMessages(title, text, {
 			maxCards: max,
 			types,
 			language: this.settings.language,
 			extraInstructions: pro ? this.settings.extraInstructions : "",
 		});
 		const raw = await complete(obsidianHttp, this.modelConfig(), system, user);
-		return parseCards(raw, types).slice(0, max);
+		return { cards: parseCards(raw, types).slice(0, max), truncated };
 	}
 
 	private async generateForEditor(editor: Editor, file: TFile): Promise<void> {
@@ -159,8 +170,9 @@ export default class CardsmithPlugin extends Plugin {
 		this.busy = true;
 		const notice = new Notice("Cardsmith is writing cards…", 0);
 		let cards: Card[];
+		let truncated = false;
 		try {
-			cards = await this.makeCards(file.basename, source);
+			({ cards, truncated } = await this.makeCards(file.basename, source));
 		} catch (e) {
 			notice.hide();
 			this.busy = false;
@@ -169,14 +181,22 @@ export default class CardsmithPlugin extends Plugin {
 		}
 		notice.hide();
 		this.busy = false;
+		if (truncated) {
+			new Notice(
+				`This ${selection.trim() ? "selection" : "note"} is longer than ${MAX_INPUT_CHARS.toLocaleString("en-US")} characters, so only the first ${MAX_INPUT_CHARS.toLocaleString("en-US")} were used. Select the rest and run Cardsmith again to cover it.`,
+				12000,
+			);
+		}
 		if (!cards.length) {
 			new Notice("The model did not return any usable cards. Try a longer section or another model.");
 			return;
 		}
 		const write = (chosen: Card[]) => {
 			const current = editor.getValue();
-			const block = buildBlock(chosen, this.settings.deckTag, hashText(stripBlock(current)));
+			const fresh = buildBlock(chosen, this.settings.deckTag, hashText(stripBlock(current)));
 			const existing = findBlock(current);
+			// keep Spaced Repetition review history for cards that are still there
+			const { block, kept, dropped } = mergeBlock(current, fresh);
 			if (existing) {
 				editor.replaceRange(block, editor.offsetToPos(existing.start), editor.offsetToPos(existing.end));
 			} else {
@@ -184,9 +204,11 @@ export default class CardsmithPlugin extends Plugin {
 				const sep = current.endsWith("\n\n") ? "" : current.endsWith("\n") ? "\n" : "\n\n";
 				editor.replaceRange(`${sep}${block}\n`, end);
 			}
-			new Notice(chosen.length === 1 ? "Added 1 card." : `Added ${chosen.length} cards.`);
+			const history = kept || dropped ? ` Kept review history for ${plural(kept, "card")}.` : "";
+			const lost = dropped ? ` ${plural(dropped, "card")} with review history ${dropped === 1 ? "was" : "were"} removed, so ${dropped === 1 ? "its" : "their"} history is gone.` : "";
+			new Notice(`Added ${plural(chosen.length, "card")}.${history}${lost}`, dropped ? 10000 : 5000);
 		};
-		if (this.settings.reviewBeforeInsert) new ReviewModal(this.app, cards, file.basename, write).open();
+		if (this.settings.reviewBeforeInsert) new ReviewModal(this.app, cards, file.basename, write, historyCount(full)).open();
 		else write(cards);
 	}
 
@@ -195,9 +217,13 @@ export default class CardsmithPlugin extends Plugin {
 		return markdownUnder(folder, this.settings.exportFolder);
 	}
 
-	/** Pro: generate for every note in a folder, skipping notes whose cards are up to date. */
-	private async generateFolder(folder: TFolder): Promise<void> {
+	/**
+	 * Pro: generate for every note in a folder, skipping notes whose cards are up to date.
+	 * With `freeLimit` (free users, once per vault): stop after that many notes got cards.
+	 */
+	private async generateFolder(folder: TFolder, freeLimit?: number): Promise<void> {
 		if (this.busy) return;
+		if (freeLimit && this.settings.freeFolderRunUsed) return;
 		const files = this.markdownIn(folder);
 		if (!files.length) {
 			new Notice("No notes in that folder.");
@@ -206,9 +232,14 @@ export default class CardsmithPlugin extends Plugin {
 		this.busy = true;
 		const notice = new Notice(`Cardsmith: 0 of ${files.length} notes`, 0);
 		let made = 0;
+		let notesDone = 0;
 		let skipped = 0;
+		let kept = 0;
+		let dropped = 0;
+		let cut = 0;
 		const failed: string[] = [];
 		for (let i = 0; i < files.length; i++) {
+			if (freeLimit && notesDone >= freeLimit) break;
 			const file = files[i]!;
 			notice.setMessage(`Cardsmith: ${i + 1} of ${files.length} notes (${file.basename})`);
 			const content = await this.app.vault.cachedRead(file);
@@ -219,16 +250,21 @@ export default class CardsmithPlugin extends Plugin {
 				continue;
 			}
 			try {
-				const cards = await this.makeCards(file.basename, body);
+				const { cards, truncated } = await this.makeCards(file.basename, body);
+				if (truncated) cut++;
 				if (!cards.length) {
 					skipped++;
 					continue;
 				}
 				await this.app.vault.process(file, (data) => {
-					const fresh = hashText(stripBlock(data));
-					return upsertBlock(data, buildBlock(cards, this.settings.deckTag, fresh));
+					const fresh = buildBlock(cards, this.settings.deckTag, hashText(stripBlock(data)));
+					const r = mergeBlock(data, fresh);
+					kept += r.kept;
+					dropped += r.dropped;
+					return upsertBlock(data, fresh);
 				});
 				made += cards.length;
+				notesDone++;
 			} catch (e) {
 				failed.push(file.basename);
 				if (e instanceof Error && /API key|rate limiting|reach/.test(e.message)) {
@@ -240,7 +276,18 @@ export default class CardsmithPlugin extends Plugin {
 		notice.hide();
 		this.busy = false;
 		const tail = failed.length ? ` ${failed.length} failed: ${failed.slice(0, 3).join(", ")}${failed.length > 3 ? "…" : ""}.` : "";
-		new Notice(`Cardsmith made ${made} cards. ${skipped} notes were already up to date or too short.${tail}`, 10000);
+		const skip = skipped ? ` ${plural(skipped, "note")} ${skipped === 1 ? "was" : "were"} already up to date or too short.` : "";
+		const hist = kept || dropped ? ` Kept review history for ${plural(kept, "card")}${dropped ? `; ${plural(dropped, "removed card")} lost ${dropped === 1 ? "its" : "theirs"}` : ""}.` : "";
+		const long = cut ? ` ${plural(cut, "note")} ${cut === 1 ? "was" : "were"} longer than ${MAX_INPUT_CHARS.toLocaleString("en-US")} characters; only the first ${MAX_INPUT_CHARS.toLocaleString("en-US")} were used.` : "";
+		new Notice(`Cardsmith made ${plural(made, "card")} from ${plural(notesDone, "note")}.${skip}${hist}${long}${tail}`, 10000);
+		if (freeLimit && notesDone > 0) {
+			this.settings.freeFolderRunUsed = true;
+			await this.saveSettings();
+			new Notice(
+				"That was your free folder run. With a license, whole folders run in one go, and later only the notes you change are refreshed. It costs $3/month, tax included.",
+				15000,
+			);
+		}
 	}
 
 	/** Offline: collect Spaced Repetition-format cards and write an Anki import file into the vault. */
@@ -263,6 +310,6 @@ export default class CardsmithPlugin extends Plugin {
 		const tsv = toAnkiTsv(all);
 		if (existing) await this.app.vault.modify(existing, tsv);
 		else await this.app.vault.create(path, tsv);
-		new Notice(`Exported ${all.length} cards to ${path}. In Anki, use File > Import.`, 8000);
+		new Notice(`Exported ${plural(all.length, "card")} to ${path}. In Anki, use File > Import.`, 8000);
 	}
 }

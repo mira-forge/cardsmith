@@ -11,6 +11,8 @@ export class ReviewModal extends Modal {
 		private cards: Card[],
 		private noteName: string,
 		private onAccept: (cards: Card[]) => void,
+		/** Cards in the note's current block that have Spaced Repetition review history. */
+		private withHistory = 0,
 	) {
 		super(app);
 		this.keep = cards.map(() => true);
@@ -19,11 +21,17 @@ export class ReviewModal extends Modal {
 	onOpen(): void {
 		const { contentEl } = this;
 		this.modalEl.addClass("cardsmith-review");
-		this.setTitle(`${this.cards.length} cards from ${this.noteName}`);
+		this.setTitle(`${this.cards.length} ${this.cards.length === 1 ? "card" : "cards"} from ${this.noteName}`);
 		contentEl.createEl("p", {
 			cls: "cardsmith-muted",
 			text: "Edit anything that is off and untick cards you do not want. Nothing is saved until you insert.",
 		});
+		if (this.withHistory > 0) {
+			contentEl.createEl("p", {
+				cls: "cardsmith-muted",
+				text: `${this.withHistory === 1 ? "1 card" : `${this.withHistory} cards`} in this note ${this.withHistory === 1 ? "has" : "have"} review history from Spaced Repetition. A card with the same question keeps it. Cards that are not in the new set lose it.`,
+			});
+		}
 		const list = contentEl.createDiv({ cls: "cardsmith-card-list" });
 		this.cards.forEach((card, i) => {
 			const row = list.createDiv({ cls: "cardsmith-card" });
