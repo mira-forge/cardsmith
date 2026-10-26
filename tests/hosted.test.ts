@@ -2,8 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeEl, MockVault, TFile, TFolder, mockReply, notices, openedModals, requestLog } from "obsidian";
 import CardsmithPlugin from "../src/main";
 import { LicenseManager } from "../src/license/manager";
-import { HOSTED_COPY, HOSTED_LABEL, HostedError, hostedGenerate, hostedText, hostedUsage, usageText, type HostedUsage } from "../src/ai/hosted";
-import { HOSTED_HOURLY_GENS, HOSTED_MONTHLY_GENS, STRIPE_LICENSE_SERVER_URL } from "../src/config";
+import { HOSTED_CONSENT, HOSTED_COPY, HOSTED_LABEL, HostedError, hostedGenerate, hostedText, hostedUsage, usageText, type HostedUsage } from "../src/ai/hosted";
+import { HOSTED_HOURLY_GENS, HOSTED_MONTHLY_BUDGET_USD, HOSTED_MONTHLY_GENS, STRIPE_LICENSE_SERVER_URL } from "../src/config";
+import { HostedConsentModal } from "../src/ui/hosted-consent-modal";
+import { PRO_MAX_CARDS } from "../src/config";
 import { MAX_INPUT_CHARS } from "../src/core/prompt";
 import { PRO_FEATURES } from "../src/core/features";
 import { ProModal } from "../src/ui/pro-modal";
@@ -106,7 +108,7 @@ describe("hosted client (pure)", () => {
 
 	it("usageText", () => {
 		expect(usageText(USAGE)).toBe("287 of 300 hosted generations left this month (resets Dec 1).");
-		expect(usageText({ plan: "trial", used: 49, limit: 50, remaining: 1, resetsAt: null })).toBe("1 of 50 hosted generations left in your trial allowance.");
+		expect(usageText({ plan: "trial", used: 0, limit: 0, remaining: 0, resetsAt: null })).toBe("Hosted generation turns on when your subscription's first payment goes through.");
 		expect(usageText(null)).toBe(`Up to ${HOSTED_MONTHLY_GENS} generations a month, ${HOSTED_HOURLY_GENS} an hour.`);
 	});
 
@@ -121,9 +123,34 @@ describe("hosted client (pure)", () => {
 		const all = [...Object.values(HOSTED_COPY), PRO_FEATURES.hostedAi, readFileSync("README.md", "utf8"), readFileSync("CHANGELOG.md", "utf8")].join("\n");
 		expect(all).not.toMatch(/\(\d{3}\)\s*\d{3}-\d{4}|\b\d{3}[-.]\d{3}[-.]\d{4}\b|\b\d+ [A-Z][a-z]+ (St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane)\b/);
 		// every limit/quota message points to the free fallback
-		for (const k of ["needsPro", "wrongLicense", "gens", "cost", "hourly", "trial", "paused", "busy", "server", "unconfigured"] as const) {
+		for (const k of ["needsPro", "wrongLicense", "declined", "gens", "cost", "hourly", "trial", "paused", "busy", "server", "unconfigured"] as const) {
 			expect(HOSTED_COPY[k]).toMatch(/own (API )?key or (a local )?Ollama/);
 		}
+	});
+
+	it("claim check (fix e): consent screen, README and CHANGELOG numbers match the code and the service", () => {
+		const consent = [HOSTED_CONSENT.intro, ...HOSTED_CONSENT.items].join("\n");
+		const readme = readFileSync("README.md", "utf8");
+		// limits: must equal LIMITS.monthlyGens / hourlyGens / monthlyCostMicroUsd in the license worker
+		expect(HOSTED_MONTHLY_BUDGET_USD).toBe(1.5);
+		expect(consent).toContain(`${HOSTED_MONTHLY_GENS} generations a month and ${HOSTED_HOURLY_GENS} an hour per license`);
+		expect(consent).toContain("$1.50 of AI cost a month");
+		expect(consent).toContain("up to the first 24,000 characters");
+		expect(MAX_INPUT_CHARS).toBe(24000);
+		for (const t of ["300 generations a month", "30 an hour", "$1.50", "24,000 characters", "300 characters", `up to ${PRO_MAX_CARDS} cards`]) expect(readme).toContain(t);
+		// who gets it: the only routable model in the worker is Google's (MODEL_ROUTES), zero data retention, no fallbacks
+		for (const t of ["Cardsmith service", "OpenRouter", "Google", "zero data retention", "no fallback"]) expect(consent).toContain(t);
+		for (const t of ["OpenRouter", "Google", "zero data retention", "Cloudflare"]) expect(readme).toContain(t);
+		// what is kept / not sent
+		expect(consent).toMatch(/doesn't store or log your note/);
+		expect(consent).toMatch(/Custom instructions and the card language setting are not sent/);
+		expect(readme).toMatch(/Custom instructions and the card language setting are not sent/);
+		expect(consent).toContain("isn't included during a free trial");
+		expect(HOSTED_COPY.trial).toContain("isn't included in a free trial");
+		expect(readme).not.toMatch(/trial allowance|hosted trial/i);
+		// how to switch back
+		expect(consent).toContain("Settings → Cardsmith → Model provider");
+		expect(readme).toContain("Settings → Cardsmith → Model provider");
 	});
 });
 
@@ -148,12 +175,13 @@ const setPro = (on: boolean) => {
 	pro = vi.spyOn(LicenseManager.prototype, "isPro").mockReturnValue(on);
 };
 
-async function hostedPlugin(app: unknown, opts: { stripe?: boolean } = {}) {
+async function hostedPlugin(app: unknown, opts: { stripe?: boolean; consent?: boolean } = {}) {
 	const p = new CardsmithPlugin(app as never, {} as never);
 	await p.onload();
 	p.settings.preset = "hosted";
 	p.settings.kind = "hosted";
 	p.settings.reviewBeforeInsert = false;
+	p.settings.hostedConsent = opts.consent ?? true;
 	p.settings.license = { key: "CARDSMITH-TEST-KEY", providerId: opts.stripe === false ? "itch" : "stripe", source: "stripe", activationId: "device-123", expiresAt: null, lastValidatedAt: Date.now() };
 	return p;
 }
@@ -189,7 +217,7 @@ afterEach(() => {
 });
 
 describe("hosted mode in the plugin", () => {
-	it("Pro: sends the note to /v1/generate only, inserts cards, shows the one-time notice and saves usage", async () => {
+	it("Pro: sends the note to /v1/generate only, inserts cards and saves usage", async () => {
 		const { app } = makeApp();
 		const p = await hostedPlugin(app);
 		p.settings.maxCards = 40;
@@ -203,13 +231,68 @@ describe("hosted mode in the plugin", () => {
 		expect(body).toMatchObject({ key: "CARDSMITH-TEST-KEY", device: "device-123", title: "Cells", cards: 40, model: "auto" });
 		expect(body.text).toContain("basic unit of life");
 		expect(ed.value).toContain("What is the basic unit of life?::The cell");
-		expect(notices).toContain(HOSTED_COPY.firstUse);
-		expect(p.settings.hostedNoticeShown).toBe(true);
 		expect(p.settings.hostedUsage).toEqual(USAGE);
-		// second run: no first-use notice again
-		notices.length = 0;
+		expect(openedModals.some((m) => m instanceof HostedConsentModal)).toBe(false);
+	});
+
+	const consentModal = () => [...openedModals].reverse().find((m) => m instanceof HostedConsentModal) as HostedConsentModal | undefined;
+	const flush = () => new Promise((r) => setTimeout(r, 0));
+	const button = (m: HostedConsentModal, text: string) => m.contentEl.find((e) => e.text === text)[0]!;
+
+	it("fix e: first hosted use asks for consent first; nothing is sent until the user accepts, and it asks only once", async () => {
+		const { app } = makeApp();
+		const p = await hostedPlugin(app, { consent: false });
+		mockReply.fn = () => ({ ok: true, text: JSON.stringify({ cards: [{ type: "basic", front: "Q?", back: "A" }] }), usage: USAGE });
+		const ed = editor(NOTE);
+		const run = gen(p)(ed, new TFile("Bio/Cells.md"));
+		await flush();
+		const m = consentModal()!;
+		expect(m.title).toBe(HOSTED_CONSENT.title);
+		const text = m.contentEl.allText();
+		for (const item of HOSTED_CONSENT.items) expect(text).toContain(item);
+		expect(requestLog).toHaveLength(0); // waiting on the user
+		button(m, HOSTED_CONSENT.accept).click();
+		await run;
+		expect(requestLog).toHaveLength(1);
+		expect(p.settings.hostedConsent).toBe(true);
+		expect(ed.value).toContain("Q?::A");
+		openedModals.length = 0;
 		await gen(p)(editor(NOTE), new TFile("Bio/Cells.md"));
-		expect(notices).not.toContain(HOSTED_COPY.firstUse);
+		expect(consentModal()).toBeUndefined();
+		expect(requestLog).toHaveLength(2);
+	});
+
+	it("fix e: Cancel or closing the consent screen sends nothing, says so, asks again next time, and stops a folder run", async () => {
+		const { app, vault } = makeApp();
+		const p = await hostedPlugin(app, { consent: false });
+		mockReply.fn = () => ({ ok: true, text: '{"cards":[]}', usage: USAGE });
+		let run = gen(p)(editor(NOTE), new TFile("Bio/Cells.md"));
+		await flush();
+		button(consentModal()!, HOSTED_CONSENT.cancel).click();
+		await run;
+		expect(requestLog).toHaveLength(0);
+		expect(p.settings.hostedConsent).toBe(false);
+		expect(notices.at(-1)).toBe(HOSTED_COPY.declined);
+		// Escape / X
+		openedModals.length = 0;
+		run = gen(p)(editor(NOTE), new TFile("Bio/Cells.md"));
+		await flush();
+		consentModal()!.close();
+		await run;
+		expect(requestLog).toHaveLength(0);
+		// folder: one prompt, declined, no note sent
+		const folder = new TFolder("Course");
+		for (let i = 1; i <= 3; i++) {
+			vault.files.set(`Course/N${i}.md`, `# N${i} ${NOTE}`);
+			folder.children.push(new TFile(`Course/N${i}.md`));
+		}
+		openedModals.length = 0;
+		const f = genFolder(p)(folder);
+		for (let i = 0; i < 5 && !consentModal(); i++) await flush();
+		button(consentModal()!, HOSTED_CONSENT.cancel).click();
+		await f;
+		expect(requestLog).toHaveLength(0);
+		expect(openedModals.filter((m) => m instanceof HostedConsentModal)).toHaveLength(1);
 	});
 
 	it("does not send custom instructions or the language setting in hosted mode", async () => {

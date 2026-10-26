@@ -32,8 +32,8 @@ export interface CardsmithSettings {
 	syncedFolders: string[];
 	/** Pro: per-note record (modified time, size, card state) so unchanged notes are not read again. */
 	syncIndex: SyncIndex;
-	/** Set once the one-line hosted-mode privacy notice has been shown. */
-	hostedNoticeShown: boolean;
+	/** Set once the user accepted the hosted-mode consent screen (nothing is sent before that). */
+	hostedConsent: boolean;
 	/** Last hosted-generation count the service reported (display only; the service enforces limits). */
 	hostedUsage: HostedUsage | null;
 }
@@ -57,7 +57,7 @@ export const DEFAULT_SETTINGS: CardsmithSettings = {
 	freeFolderRunUsed: false,
 	syncedFolders: [],
 	syncIndex: {},
-	hostedNoticeShown: false,
+	hostedConsent: false,
 	hostedUsage: null,
 };
 

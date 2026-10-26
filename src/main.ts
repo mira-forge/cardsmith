@@ -1,6 +1,7 @@
 import { MarkdownView, Notice, Plugin, TFile, TFolder, normalizePath, requestUrl, type Editor } from "obsidian";
 import { CardsmithSettingTab, DEFAULT_SETTINGS, type CardsmithSettings } from "./settings";
 import { complete, type HttpFn, type ModelConfig, type ProviderKind } from "./ai/providers";
+import { askHostedConsent } from "./ui/hosted-consent-modal";
 import { HOSTED_COPY, HOSTED_PRESET, HostedError, hostedGenerate, hostedText, hostedUsage, MAX_TITLE_CHARS, usageText, type HostedUsage } from "./ai/hosted";
 import { buildBlock, findBlock, hashText, mergeBlock, parseCards, stripBlock, upsertBlock, type Card, type CardType } from "./core/cards";
 import { buildMessages, MAX_INPUT_CHARS } from "./core/prompt";
@@ -226,9 +227,10 @@ export default class CardsmithPlugin extends Plugin {
 	/** Hosted: the server builds the prompt and picks the model; only title, text, card count and types are sent. */
 	private async makeHostedCards(title: string, text: string, max: number, types: CardType[]): Promise<{ cards: Card[]; truncated: boolean }> {
 		const id = this.hostedIdentity();
-		if (!this.settings.hostedNoticeShown) {
-			new Notice(HOSTED_COPY.firstUse, 12000);
-			this.settings.hostedNoticeShown = true;
+		if (!this.settings.hostedConsent) {
+			// Nothing is sent until the user accepts the one-time consent screen.
+			if (!(await askHostedConsent(this.app))) throw new HostedError("declined", HOSTED_COPY.declined, true);
+			this.settings.hostedConsent = true;
 			await this.saveSettings();
 		}
 		const cut = hostedText(text);

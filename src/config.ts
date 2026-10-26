@@ -39,3 +39,5 @@ export const PRO_MAX_CARDS = 50;
  */
 export const HOSTED_MONTHLY_GENS = 300;
 export const HOSTED_HOURLY_GENS = 30;
+/** LIMITS.monthlyCostMicroUsd (1,500,000) in the license service, in US dollars. */
+export const HOSTED_MONTHLY_BUDGET_USD = 1.5;

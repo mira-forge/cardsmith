@@ -7,11 +7,12 @@
  * the card types. The service builds the prompt, picks the model and sends the request through
  * OpenRouter to Google (zero data retention required). It stores counters only (key hash, monthly count, cost),
  * never the note. Custom instructions and the card language setting are not sent in hosted mode.
+ * Nothing is sent before the user accepts the one-time consent screen (HOSTED_CONSENT).
  */
 import type { HttpFn } from "./providers";
 import type { CardType } from "../core/cards";
 import { MAX_INPUT_CHARS } from "../core/prompt";
-import { HOSTED_HOURLY_GENS, HOSTED_MONTHLY_GENS } from "../config";
+import { HOSTED_HOURLY_GENS, HOSTED_MONTHLY_BUDGET_USD, HOSTED_MONTHLY_GENS } from "../config";
 
 export const HOSTED_PRESET = "hosted";
 export const HOSTED_LABEL = "Hosted (Pro, no key needed)";
@@ -22,11 +23,11 @@ export interface HostedUsage {
 	used: number;
 	limit: number;
 	remaining: number;
-	/** ms since epoch (start of next month, UTC); null for the one-time trial allowance. */
+	/** ms since epoch (start of next month, UTC); null while the subscription is in a free trial (no hosted generations). */
 	resetsAt: number | null;
 }
 
-export type HostedErrorCode = "needs_pro" | "wrong_license" | "quota" | "auth" | "server" | "network" | "unconfigured";
+export type HostedErrorCode = "needs_pro" | "wrong_license" | "declined" | "quota" | "auth" | "server" | "network" | "unconfigured";
 
 export class HostedError extends Error {
 	constructor(
@@ -41,15 +42,36 @@ export class HostedError extends Error {
 }
 
 const SWITCH = "Settings → Cardsmith → Model provider";
+const MAX_CHARS = MAX_INPUT_CHARS.toLocaleString("en-US");
+
+/**
+ * One-time consent screen, shown before the first hosted request. Nothing is sent unless the user accepts.
+ * Every claim here is checked against code in tests/hosted.test.ts (claim check) and the license service.
+ */
+export const HOSTED_CONSENT = {
+	title: "Use hosted generation?",
+	intro: "Hosted mode makes cards without your own API key. Before you start, here is what happens to your note.",
+	items: [
+		`What is sent: the note's title, its text (up to the first ${MAX_CHARS} characters), how many cards you want and which card types, plus your license key and this device's random ID. Custom instructions and the card language setting are not sent.`,
+		"Who gets it: the Cardsmith service (Mira Forge's license server on Cloudflare) builds the request and sends the title and text through OpenRouter to Google's Gemini model, which writes the cards.",
+		"Retention: the request requires zero data retention, so it may only go to a Google endpoint that doesn't keep prompts or answers, with no fallback to other providers. The Cardsmith service doesn't store or log your note, its title or the cards.",
+		"What is kept: only counters per license, stored under a hash of your key: generations and AI cost this month. A per-network hourly counter uses a keyed hash, not your IP address.",
+		`Limits: ${HOSTED_MONTHLY_GENS} generations a month and ${HOSTED_HOURLY_GENS} an hour per license, and $${HOSTED_MONTHLY_BUDGET_USD.toFixed(2)} of AI cost a month, so very long notes or answers can use it up sooner. Hosted generation isn't included during a free trial and can be paused for everyone if the service's monthly spending limit is reached.`,
+		`Switch back any time: pick your own key or Ollama in ${SWITCH}. Those requests go straight from this device to that provider and skip our server.`,
+	],
+	accept: "Use hosted generation",
+	cancel: "Cancel",
+} as const;
 /** User-facing copy. Numbers come from config (they must match the license service's limits). */
 export const HOSTED_COPY = {
-	firstUse: "Hosted mode sends the note's text to the Cardsmith service, which passes it through OpenRouter to Google with zero data retention required. Cardsmith keeps only usage counts, never your note. Your own key or Ollama skip our server.",
+	firstUse: "Hosted mode sends the note's title and text to the Cardsmith service, which passes them through OpenRouter to Google with zero data retention required. Cardsmith keeps only usage counters, never your note. Your own key or Ollama skip our server.",
+	declined: `Nothing was sent. To make cards without hosted mode, pick your own key or Ollama in ${SWITCH}.`,
 	needsPro: `Hosted generation is part of Cardsmith Pro. Without Pro, use your own API key or a local Ollama model for free in ${SWITCH}.`,
 	wrongLicense: `Hosted generation needs a Cardsmith Pro subscription key (CARDSMITH-…). Your own key or Ollama work for free in ${SWITCH}.`,
 	gens: `You've used this month's ${HOSTED_MONTHLY_GENS} hosted generations (resets on the 1st). Keep going for free with your own key or Ollama in ${SWITCH}.`,
 	cost: `You've used this month's hosted generation budget (resets on the 1st). Keep going for free with your own key or Ollama in ${SWITCH}.`,
 	hourly: `Hosted generation is limited to ${HOSTED_HOURLY_GENS} an hour. Try again after the top of the hour, or use your own key or Ollama in ${SWITCH}.`,
-	trial: `You've used the hosted trial allowance. Hosted generation unlocks fully when your subscription's first payment goes through. Meanwhile, use your own key or Ollama in ${SWITCH}.`,
+	trial: `Hosted generation isn't included in a free trial. It turns on when your subscription's first payment goes through. Meanwhile, use your own key or Ollama in ${SWITCH}.`,
 	paused: `Hosted generation is paused right now. Your own key or Ollama still work for free in ${SWITCH}.`,
 	busy: `Too many hosted requests from this network. Try again in an hour, or use your own key or Ollama in ${SWITCH}.`,
 	server: `The hosted AI had a problem making cards. Try again in a minute, or use your own key or Ollama in ${SWITCH}.`,
@@ -139,7 +161,7 @@ export async function hostedUsage(http: HttpFn, serverUrl: string, key: string, 
 export function usageText(u: HostedUsage | null | undefined): string {
 	if (!u) return `Up to ${HOSTED_MONTHLY_GENS} generations a month, ${HOSTED_HOURLY_GENS} an hour.`;
 	const n = `${u.remaining} of ${u.limit} hosted ${u.limit === 1 ? "generation" : "generations"}`;
-	if (u.plan === "trial") return `${n} left in your trial allowance.`;
+	if (u.plan === "trial") return "Hosted generation turns on when your subscription's first payment goes through.";
 	const reset = u.resetsAt ? ` (resets ${new Date(u.resetsAt).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })})` : "";
 	return `${n} left this month${reset}.`;
 }
