@@ -14,7 +14,6 @@ export default defineConfig(
 		'package-lock.json',
 		'tsconfig.json',
 		'tests',
-		'license-server',
 		'vitest.config.mts',
 	]),
 	{

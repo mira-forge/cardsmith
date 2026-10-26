@@ -91,7 +91,7 @@ npm run lint       # eslint-plugin-obsidianmd
 
 The Stripe license service lives in a separate project (`cardsmith-license-stripe`). The original Polar rail is still in the code (`src/license/polar-provider.ts`) as a fallback, but it is inactive unless a build sets `LICENSE_RAIL = "polar"` in `src/config.ts`. With the default `"stripe"` setting, the plugin never contacts Polar.
 
-`license-server/` holds an optional, currently unused license check for itch.io purchases (itch.io's API needs a secret key, so it cannot run in the plugin). It is off in this build: with it off, the plugin makes no requests to it.
+The license services (the Stripe license Worker, and an unused itch.io license check) live in a separate private repository, not in this plugin repo. The plugin's itch.io check is off in this build, so it makes no requests to it. Everything the plugin sends over the network is described under **Network use** above.
 
 ## Support
 
