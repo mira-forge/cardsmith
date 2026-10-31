@@ -17,7 +17,7 @@ Free covers single notes (up to 10 cards each, cloze and reversed cards included
 ## Features
 
 - **Cards from the note you are reading.** Run one command (or select the layers icon) on a note or a selection.
-- **You approve every card.** A review window lets you edit, untick or keep each card. Nothing touches your note until you select **Insert**. If inserting would remove cards you have already reviewed in Spaced Repetition, the window lists their questions first.
+- **Nothing changes in your note until you approve the cards.** A review window lets you edit, untick or keep each card, then you approve the batch. Nothing touches your note until you select **Insert**. If inserting would remove cards you have already reviewed in Spaced Repetition, the window lists their questions first.
 - **Your AI, your account.** OpenAI, Anthropic, OpenRouter, any OpenAI-compatible endpoint, or **Ollama on your own computer**, so nothing leaves your machine.
 - **Your note stays yours.** Cards go into one clearly marked block at the end of the note. Running it again replaces only that block, and a card that keeps its question keeps its Spaced Repetition review history.
 - **Synced folders (Pro).** Pick folders once. When Obsidian starts, Cardsmith counts the notes in them that changed since their cards were made or have no cards yet, and shows the count in the status bar (for example, "7 notes have new content"). Select it to review new cards for all of those notes in one window. Nothing is saved until you approve it.
