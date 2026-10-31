@@ -413,3 +413,24 @@ describe("hosted mode in the plugin", () => {
 		expect(items.find((i) => i.name === "Hosted generations")!.desc).toBe(HOSTED_COPY.needsPro);
 	});
 });
+
+describe("Pro-only gate (Oct 31): hosted mode never calls OpenRouter or any model API directly", () => {
+	it("hostedGenerate/hostedUsage only hit the license server, and send no provider key", async () => {
+		const seen: { url: string; body: string; headers: string }[] = [];
+		const http = (async (req: { url: string; body?: string; headers?: Record<string, string> }) => {
+			seen.push({ url: req.url, body: String(req.body ?? ""), headers: JSON.stringify(req.headers ?? {}) });
+			return { status: 200, json: { ok: true, text: "{\"cards\":[]}", available: true, usage: USAGE }, text: "" };
+		}) as unknown as HttpFn;
+		await hostedGenerate(http, STRIPE_LICENSE_SERVER_URL, { key: "CARDSMITH-TEST", device: "device-1-abcdefghijklmnop", title: "t", text: "note", cards: 5, types: ["basic"] }).catch(() => undefined);
+		await hostedUsage(http, STRIPE_LICENSE_SERVER_URL, "CARDSMITH-TEST", "device-1-abcdefghijklmnop").catch(() => undefined);
+		expect(seen.length).toBeGreaterThan(0);
+		for (const r of seen) {
+			expect(r.url.startsWith(STRIPE_LICENSE_SERVER_URL + "/v1/")).toBe(true);
+			expect(r.url).not.toMatch(/openrouter|openai|anthropic|googleapis/i);
+			expect(r.headers + r.body).not.toMatch(/sk-or-|authorization/i);
+		}
+	});
+	it("no OpenRouter URL in the hosted code path source", () => {
+		for (const f of ["src/ai/hosted.ts", "src/ui/hosted-consent-modal.ts"]) expect(readFileSync(f, "utf8")).not.toMatch(/openrouter\.ai/i);
+	});
+});
