@@ -17,6 +17,11 @@ import { HOSTED_HOURLY_GENS, HOSTED_MONTHLY_BUDGET_USD, HOSTED_MONTHLY_GENS } fr
 export const HOSTED_PRESET = "hosted";
 export const HOSTED_LABEL = "Hosted (Pro, no key needed)";
 export const MAX_TITLE_CHARS = 300;
+/**
+ * Client-side wait for /v1/generate. Must stay LONGER than the server's provider timeout (90 s, Worker
+ * LIMITS.providerTimeoutMs) so the server always settles and answers first; a 50-card request can take ~1 min.
+ */
+export const HOSTED_CLIENT_TIMEOUT_MS = 100_000;
 
 export interface HostedUsage {
 	plan: "pro" | "trial";
@@ -75,6 +80,7 @@ export const HOSTED_COPY = {
 	paused: `Hosted generation is paused right now. Your own key or Ollama still work for free in ${SWITCH}.`,
 	busy: `Too many hosted requests from this network. Try again in an hour, or use your own key or Ollama in ${SWITCH}.`,
 	server: `The hosted AI had a problem making cards. Try again in a minute, or use your own key or Ollama in ${SWITCH}.`,
+	timeout: `The hosted AI took too long to answer. Try again, make fewer cards at once, or use your own key or Ollama in ${SWITCH}.`,
 	network: `Could not reach the Cardsmith service. Check your connection, or use a local Ollama model in ${SWITCH}.`,
 	unconfigured: `Hosted generation isn't available in this build. Use your own key or Ollama in ${SWITCH}.`,
 } as const;
@@ -121,7 +127,7 @@ function toError(status: number, j: { code?: string; reason?: string; error?: st
 	return new HostedError("server", HOSTED_COPY.server, status >= 500 && status !== 502, usage);
 }
 
-export async function hostedGenerate(http: HttpFn, serverUrl: string, r: HostedRequest): Promise<{ text: string; usage?: HostedUsage }> {
+export async function hostedGenerate(http: HttpFn, serverUrl: string, r: HostedRequest, timeoutMs = HOSTED_CLIENT_TIMEOUT_MS): Promise<{ text: string; usage?: HostedUsage }> {
 	const url = endpoint(serverUrl, "/v1/generate");
 	const body = {
 		key: r.key,
@@ -134,10 +140,19 @@ export async function hostedGenerate(http: HttpFn, serverUrl: string, r: HostedR
 		model: "auto",
 	};
 	let res;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const TIMED_OUT = Symbol("timeout");
 	try {
-		res = await http({ url, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-	} catch {
+		// Obsidian's requestUrl can't be aborted, so stop waiting instead (the server still settles the call).
+		const t = new Promise<typeof TIMED_OUT>((resolve) => (timer = setTimeout(() => resolve(TIMED_OUT), timeoutMs)));
+		const r2 = await Promise.race([http({ url, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), t]);
+		if (r2 === TIMED_OUT) throw new HostedError("network", HOSTED_COPY.timeout, true);
+		res = r2;
+	} catch (e) {
+		if (e instanceof HostedError) throw e;
 		throw new HostedError("network", HOSTED_COPY.network, true);
+	} finally {
+		clearTimeout(timer);
 	}
 	const j = (res.json ?? {}) as { ok?: boolean; text?: string; code?: string; reason?: string; error?: string; usage?: unknown };
 	if (res.status === 200 && j.ok && typeof j.text === "string") return { text: j.text, usage: readUsage(j.usage) };

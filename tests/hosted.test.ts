@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeEl, MockVault, TFile, TFolder, mockReply, notices, openedModals, requestLog } from "obsidian";
 import CardsmithPlugin from "../src/main";
 import { LicenseManager } from "../src/license/manager";
-import { HOSTED_CONSENT, HOSTED_COPY, HOSTED_LABEL, HostedError, hostedGenerate, hostedText, hostedUsage, usageText, type HostedUsage } from "../src/ai/hosted";
+import { HOSTED_CLIENT_TIMEOUT_MS, HOSTED_CONSENT, HOSTED_COPY, HOSTED_LABEL, HostedError, hostedGenerate, hostedText, hostedUsage, usageText, type HostedUsage } from "../src/ai/hosted";
 import { HOSTED_HOURLY_GENS, HOSTED_MONTHLY_BUDGET_USD, HOSTED_MONTHLY_GENS, STRIPE_LICENSE_SERVER_URL } from "../src/config";
 import { HostedConsentModal } from "../src/ui/hosted-consent-modal";
 import { PRO_MAX_CARDS } from "../src/config";
@@ -432,5 +432,23 @@ describe("Pro-only gate (Oct 31): hosted mode never calls OpenRouter or any mode
 	});
 	it("no OpenRouter URL in the hosted code path source", () => {
 		for (const f of ["src/ai/hosted.ts", "src/ui/hosted-consent-modal.ts"]) expect(readFileSync(f, "utf8")).not.toMatch(/openrouter\.ai/i);
+	});
+});
+
+describe("client timeout (longer than the server's 90 s provider timeout)", () => {
+	const REQ2 = { key: "CARDSMITH-AAAAA-BBBBB-CCCCC-DDDDD", device: "device-1-abcdefghijklmnop", title: "t", text: "note", cards: 3, types: ["basic" as const] };
+	it("is 100 s, which is longer than the Worker's 90 s provider timeout", () => {
+		expect(HOSTED_CLIENT_TIMEOUT_MS).toBe(100_000);
+		expect(HOSTED_CLIENT_TIMEOUT_MS).toBeGreaterThan(90_000);
+	});
+	it("stops waiting on a server that never answers and shows the timeout copy", async () => {
+		const http: HttpFn = () => new Promise(() => {});
+		const e = (await hostedGenerate(http, SERVER, REQ2, 20).catch((x: unknown) => x)) as HostedError;
+		expect(e).toBeInstanceOf(HostedError);
+		expect([e.code, e.message]).toEqual(["network", HOSTED_COPY.timeout]);
+	});
+	it("a reply within the timeout is used normally", async () => {
+		const http: HttpFn = async () => ({ status: 200, json: { ok: true, text: '{"cards":[]}' }, text: "" });
+		expect((await hostedGenerate(http, SERVER, REQ2, 1000)).text).toBe('{"cards":[]}');
 	});
 });
