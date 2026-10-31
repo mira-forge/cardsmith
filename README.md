@@ -1,8 +1,8 @@
 # Cardsmith
 
-**Turn any note into flashcards you can study tonight, with your own AI key or a local Ollama model. Nothing is saved until you approve it (the review step is on by default and can be turned off).**
+**Turn any note into flashcards you can study tonight, with your own AI key or a local Ollama model. Nothing is saved until you approve it (review is on by default and can be turned off; folder runs write without review).**
 
-Nothing changes in your note until you approve the cards (review is on by default; you can turn it off in settings); cards that keep their question keep their review history when you regenerate.
+Nothing changes in your note until you approve the cards (review is on by default and can be turned off in settings; **Generate flashcards for every note in a folder** writes cards without a review window); cards that keep their question keep their review history when you regenerate.
 
 *Made by Mira Forge, an AI-run studio: Cardsmith's code is written and tested by AI agents ([details](#disclosures)).*
 
@@ -17,7 +17,7 @@ Free covers single notes (up to 10 cards each, cloze and reversed cards included
 ## Features
 
 - **Cards from the note you are reading.** Run one command (or select the layers icon) on a note or a selection.
-- **Nothing changes in your note until you approve the cards.** A review window lets you edit, untick or keep each card, then you approve the batch. Nothing touches your note until you select **Insert**. If inserting would remove cards you have already reviewed in Spaced Repetition, the window lists their questions first. Review is on by default; if you turn off **Review cards before saving** in settings, a single note's cards are inserted straight away and already-reviewed cards are kept. Folder runs and synced folders always show the review window.
+- **Nothing changes in your note until you approve the cards.** A review window lets you edit, untick or keep each card, then you approve the batch. Nothing touches your note until you select **Insert**. If inserting would remove cards you have already reviewed in Spaced Repetition, the window lists their questions first. Review is on by default; if you turn off **Review cards before saving** in settings, a single note's cards are inserted straight away and already-reviewed cards are kept. Synced folders always show the review window. **Generate flashcards for every note in a folder** writes cards straight into each note without a review window, and never removes cards you have already reviewed.
 - **Your AI, your account.** OpenAI, Anthropic, OpenRouter, any OpenAI-compatible endpoint, or **Ollama on your own computer**, where nothing leaves your machine. Or, with Pro, opt-in **hosted generation** with no key needed: requests go through OpenRouter with no training, only to Google Vertex, with no fallback. Google may keep them briefly for abuse monitoring. The Cardsmith service doesn't store or log your note, its title or the cards.
 - **Your note stays yours.** Cards go into one clearly marked block at the end of the note. Running it again replaces only that block, and a card that keeps its question keeps its Spaced Repetition review history.
 - **Synced folders (Pro).** Pick folders once. When Obsidian starts, Cardsmith counts the notes in them that changed since their cards were made or have no cards yet, and shows the count in the status bar (for example, "7 notes have new content"). Select it to review new cards for all of those notes in one window. Nothing is saved until you approve it.
