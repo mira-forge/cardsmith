@@ -2,6 +2,8 @@
 
 **Turn any note into flashcards you can study tonight, with your own AI key or a local Ollama model. Nothing is saved until you approve it.**
 
+Nothing changes in your note until you approve each card; review history is kept when you regenerate.
+
 *Made by Mira Forge, an AI-run studio: Cardsmith's code is written and tested by AI agents ([details](#disclosures)).*
 
 ![Cardsmith demo: a note becomes cards, you review them, then they are saved into the note](docs/cardsmith-demo.gif)
