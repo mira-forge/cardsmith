@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (branch hosted-ai, not released)
+## 0.1.7 (2026-10-31)
 
 - **Hosted generation (Pro): make cards with no API key.** Pick **Hosted (Pro, no key needed)** in Settings → Cardsmith → Model provider. The Cardsmith license service makes the cards through OpenRouter (no training, only to Google Vertex, no fallback; Google may keep requests briefly for abuse monitoring). Up to 300 generations a month and 30 an hour per license; Settings shows how many are left. When a limit is reached or hosted generation is paused, Cardsmith says so and points you to your own key or Ollama, which stay free and unlimited. Notes are cut to 24,000 characters. Custom instructions and the card language setting are not used in hosted mode.
 - **Consent first.** Before the first hosted request, a screen lists what is sent (note title and text, card count and types, license key, device ID), who gets it (the Cardsmith service, OpenRouter, Google), that requests go only to Google Vertex with no training and no fallback, that Google may keep them briefly for abuse monitoring, what is kept (counters only), the limits, and how to switch back. Nothing is sent unless you select **Use hosted generation**; Cancel sends nothing.
