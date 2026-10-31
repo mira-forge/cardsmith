@@ -5,7 +5,8 @@
  * Network use: POST to the Mira Forge license service (/v1/generate) with the license key, this
  * device's random id, the note title, the note text (at most 24,000 characters), the card count and
  * the card types. The service builds the prompt, picks the model and sends the request through
- * OpenRouter to Google (zero data retention required). It stores counters only (key hash, monthly count, cost),
+ * OpenRouter to Google Vertex only (no training, no fallback; Google may keep
+ * requests briefly for abuse monitoring). It stores counters only (key hash, monthly count, cost),
  * never the note. Custom instructions and the card language setting are not sent in hosted mode.
  * Nothing is sent before the user accepts the one-time consent screen (HOSTED_CONSENT).
  */
@@ -59,7 +60,7 @@ export const HOSTED_CONSENT = {
 	items: [
 		`What is sent: the note's title, its text (up to the first ${MAX_CHARS} characters), how many cards you want and which card types, plus your license key and this device's random ID. Custom instructions and the card language setting are not sent.`,
 		"Who gets it: the Cardsmith service (Mira Forge's license server on Cloudflare) builds the request and sends the title and text through OpenRouter to Google's Gemini model, which writes the cards.",
-		"Retention: the request requires zero data retention, so it may only go to a Google endpoint that doesn't keep prompts or answers, with no fallback to other providers. The Cardsmith service doesn't store or log your note, its title or the cards.",
+		"Retention: Requests go through OpenRouter with no training, only to Google Vertex, with no fallback. Google may keep them briefly for abuse monitoring. The Cardsmith service doesn't store or log your note, its title or the cards.",
 		"What is kept: only counters per license, stored under a hash of your key: generations and AI cost this month. A per-network hourly counter uses a keyed hash, not your IP address.",
 		`Limits: ${HOSTED_MONTHLY_GENS} generations a month and ${HOSTED_HOURLY_GENS} an hour per license, and $${HOSTED_MONTHLY_BUDGET_USD.toFixed(2)} of AI cost a month, so very long notes or answers can use it up sooner. Hosted generation isn't included during a free trial and can be paused for everyone if the service's monthly spending limit is reached.`,
 		`Switch back any time: pick your own key or Ollama in ${SWITCH}. Those requests go straight from this device to that provider and skip our server.`,
@@ -69,7 +70,7 @@ export const HOSTED_CONSENT = {
 } as const;
 /** User-facing copy. Numbers come from config (they must match the license service's limits). */
 export const HOSTED_COPY = {
-	firstUse: "Hosted mode sends the note's title and text to the Cardsmith service, which passes them through OpenRouter to Google with zero data retention required. Cardsmith keeps only usage counters, never your note. Your own key or Ollama skip our server.",
+	firstUse: "Hosted mode sends the note's title and text to the Cardsmith service, which passes them through OpenRouter to Google Vertex with no training and no fallback. Google may keep them briefly for abuse monitoring. Cardsmith keeps only usage counters, never your note. Your own key or Ollama skip our server.",
 	declined: `Nothing was sent. To make cards without hosted mode, pick your own key or Ollama in ${SWITCH}.`,
 	needsPro: `Hosted generation is part of Cardsmith Pro. Without Pro, use your own API key or a local Ollama model for free in ${SWITCH}.`,
 	wrongLicense: `Hosted generation needs a Cardsmith Pro subscription key (CARDSMITH-…). Your own key or Ollama work for free in ${SWITCH}.`,

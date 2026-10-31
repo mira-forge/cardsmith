@@ -138,9 +138,10 @@ describe("hosted client (pure)", () => {
 		expect(consent).toContain("up to the first 24,000 characters");
 		expect(MAX_INPUT_CHARS).toBe(24000);
 		for (const t of ["300 generations a month", "30 an hour", "$1.50", "24,000 characters", "300 characters", `up to ${PRO_MAX_CARDS} cards`]) expect(readme).toContain(t);
-		// who gets it: the only routable model in the worker is Google's (MODEL_ROUTES), zero data retention, no fallbacks
-		for (const t of ["Cardsmith service", "OpenRouter", "Google", "zero data retention", "no fallback"]) expect(consent).toContain(t);
-		for (const t of ["OpenRouter", "Google", "zero data retention", "Cloudflare"]) expect(readme).toContain(t);
+		// who gets it: only Google Vertex (MODEL_ROUTES), no training, no fallback; no zero-retention claim
+		for (const t of ["Cardsmith service", "OpenRouter", "Google Vertex", "no training", "no fallback", "abuse monitoring"]) expect(consent).toContain(t);
+		expect(consent).not.toMatch(/zero data retention/i);
+		for (const t of ["OpenRouter", "Google Vertex", "abuse monitoring", "Cloudflare"]) expect(readme).toContain(t);
 		// what is kept / not sent
 		expect(consent).toMatch(/doesn't store or log your note/);
 		expect(consent).toMatch(/Custom instructions and the card language setting are not sent/);
