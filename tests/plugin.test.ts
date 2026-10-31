@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { MockVault, TFile, TFolder, mockReply, notices, requestLog } from "obsidian";
+import { FakeEl, MockVault, TFile, TFolder, mockReply, notices, openedModals, requestLog } from "obsidian";
+import { SyncReviewModal } from "../src/ui/sync-review-modal";
 import CardsmithPlugin from "../src/main";
 
 function makeApp() {
@@ -74,6 +75,7 @@ describe("plugin with mocked Obsidian", () => {
 		p.settings.baseUrl = "http://localhost:11434";
 		mockReply.fn = () => ({ message: { content: JSON.stringify({ cards: [{ type: "basic", front: "What is the basic unit of life?", back: "The cell" }, { type: "cloze", front: "Every ==organism== is made of cells." }] }) } });
 		p.settings.useCloze = true;
+		p.settings.reviewBeforeInsert = false; // the no-review path; the review path is tested below
 		try {
 			const gen = (p as unknown as { generateFolder: (f: TFolder, n?: number) => Promise<void> }).generateFolder.bind(p);
 			await gen(folder, 5);
@@ -93,6 +95,46 @@ describe("plugin with mocked Obsidian", () => {
 			await gen(folder, 5);
 			expect(requestLog.length).toBe(before);
 			expect(vault.files.get("Course/Note6.md")).not.toContain("cardsmith:start");
+		} finally {
+			mockReply.fn = null;
+		}
+	});
+	it("folder run with review on (default) writes nothing until the batch is approved; Cancel writes nothing", async () => {
+		const { app, vault } = makeApp();
+		const folder = new TFolder("Course");
+		const long = " The cell is the basic unit of life and every organism is made of one or more cells.";
+		for (let i = 1; i <= 3; i++) {
+			const path = `Course/Note${i}.md`;
+			vault.files.set(path, `# Note ${i}${long}`);
+			folder.children.push(new TFile(path));
+		}
+		const p = new CardsmithPlugin(app as never, {} as never);
+		await p.onload();
+		p.settings.kind = "ollama";
+		p.settings.baseUrl = "http://localhost:11434";
+		expect(p.settings.reviewBeforeInsert).toBe(true);
+		mockReply.fn = () => ({ message: { content: JSON.stringify({ cards: [{ type: "basic", front: "What is the basic unit of life?", back: "The cell" }] }) } });
+		const last = () => [...openedModals].reverse().find((m) => m instanceof SyncReviewModal) as SyncReviewModal;
+		const btn = (m: SyncReviewModal, re: RegExp) => ((m as unknown as { contentEl: FakeEl }).contentEl).find((e) => e.tag === "button").find((b) => re.test(b.text))!;
+		const flush = () => new Promise((r) => setTimeout(r, 5));
+		try {
+			const gen = (p as unknown as { generateFolder: (f: TFolder, n?: number) => Promise<void> }).generateFolder.bind(p);
+			const before = new Map(vault.files);
+			await gen(folder);
+			const m1 = last();
+			expect(m1).toBeDefined();
+			expect(vault.files).toEqual(before); // nothing written while the window is open
+			btn(m1, /^Cancel$/).click();
+			await flush();
+			expect(vault.files).toEqual(before);
+			expect(notices.at(-1)).toBe("Nothing was saved.");
+			await gen(folder);
+			const m2 = last();
+			expect(m2).not.toBe(m1);
+			expect(vault.files).toEqual(before);
+			btn(m2, /^Approve/).click();
+			await flush();
+			for (let i = 1; i <= 3; i++) expect(vault.files.get(`Course/Note${i}.md`)).toContain("What is the basic unit of life?::The cell");
 		} finally {
 			mockReply.fn = null;
 		}

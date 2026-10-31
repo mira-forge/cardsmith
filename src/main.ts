@@ -347,6 +347,9 @@ export default class CardsmithPlugin extends Plugin {
 		let preserved = 0;
 		let cut = 0;
 		const failed: string[] = [];
+		// with review on (the default), nothing is written until the user approves the batch
+		const review = this.settings.reviewBeforeInsert;
+		const items: (SyncItem & { hash: string })[] = [];
 		for (let i = 0; i < files.length; i++) {
 			if (freeLimit && notesDone >= freeLimit) break;
 			const file = files[i]!;
@@ -363,6 +366,21 @@ export default class CardsmithPlugin extends Plugin {
 				if (truncated) cut++;
 				if (!cards.length) {
 					skipped++;
+					continue;
+				}
+				if (review) {
+					items.push({
+						path: file.path,
+						name: file.basename,
+						reason: findBlock(content) ? "changed" : "new",
+						cards,
+						hash,
+						preview: (chosen) => {
+							const r = mergeBlock(content, buildBlock(chosen, this.settings.deckTag, hash), true);
+							return { kept: r.kept, stays: r.unmatched };
+						},
+					});
+					notesDone++;
 					continue;
 				}
 				await this.app.vault.process(file, (data) => {
@@ -385,6 +403,24 @@ export default class CardsmithPlugin extends Plugin {
 		}
 		notice.hide();
 		this.busy = false;
+		if (review) {
+			const lines: string[] = [];
+			if (failed.length) lines.push(`${plural(failed.length, "note")} failed and ${failed.length === 1 ? "is" : "are"} not listed: ${failed.slice(0, 3).join(", ")}${failed.length > 3 ? "…" : ""}.`);
+			if (skipped) lines.push(`${plural(skipped, "note")} ${skipped === 1 ? "was" : "were"} already up to date, too short, or got no usable cards.`);
+			if (cut) lines.push(`${plural(cut, "note")} ${cut === 1 ? "was" : "were"} longer than ${MAX_INPUT_CHARS.toLocaleString("en-US")} characters; only the first ${MAX_INPUT_CHARS.toLocaleString("en-US")} were used.`);
+			if (!items.length) {
+				new Notice(`Nothing to review.${lines.length ? " " + lines.join(" ") : ""}`, 8000);
+				return;
+			}
+			new SyncReviewModal(
+				this.app,
+				items,
+				(approved) => this.applySync(approved as (SyncApproval & { item: SyncItem & { hash: string } })[], !!freeLimit),
+				() => new Notice("Nothing was saved."),
+				lines,
+			).open();
+			return;
+		}
 		const tail = failed.length ? ` ${failed.length} failed: ${failed.slice(0, 3).join(", ")}${failed.length > 3 ? "…" : ""}.` : "";
 		const skip = skipped ? ` ${plural(skipped, "note")} ${skipped === 1 ? "was" : "were"} already up to date or too short.` : "";
 		const hist = kept ? ` Kept review history for ${plural(kept, "card")}.` : "";
