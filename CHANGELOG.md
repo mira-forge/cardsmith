@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.9 (2026-11-01)
+
+- Fix: Spaced Repetition review schedules on the last card of a block are no longer lost when regenerating; schedules from older versions are recovered.
+
 ## 0.1.7 (2026-10-31)
 
 - **Hosted generation (Pro): make cards with no API key.** Pick **Hosted (Pro, no key needed)** in Settings → Cardsmith → Model provider. The Cardsmith license service makes the cards through OpenRouter (no training, only to Google Vertex, no fallback; Google may keep requests briefly for abuse monitoring). Up to 300 generations a month and 30 an hour per license; Settings shows how many are left. When a limit is reached or hosted generation is paused, Cardsmith says so and points you to your own key or Ollama, which stay free and unlimited. Notes are cut to 24,000 characters. Custom instructions and the card language setting are not used in hosted mode.

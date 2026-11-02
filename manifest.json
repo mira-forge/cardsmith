@@ -1,7 +1,7 @@
 {
 	"id": "cardsmith",
 	"name": "Cardsmith",
-	"version": "0.1.8",
+	"version": "0.1.9",
 	"minAppVersion": "1.11.4",
 	"description": "Generate spaced-repetition flashcards from your notes with your own AI key, a local Ollama model or hosted generation (Pro), review them before they are saved (review is on by default and can be turned off in settings), and export them to Anki.",
 	"author": "Mira Forge",
