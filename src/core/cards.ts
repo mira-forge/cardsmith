@@ -154,7 +154,7 @@ export function findBlock(note: string): BlockInfo | null {
 	let end = endIdx + BLOCK_END.length;
 	// Blocks written before 0.1.9 had no blank line before the end marker, so SR may have put the last
 	// card's schedule right after it. Those lines belong to the block: count them in so they are never lost.
-	const trail = note.slice(end).match(/^(?:\r?\n(?:<!--SR:[^\n]*-->|> \[!sr\|card-metadata\][^\n]*(?:\r?\n>[^\n]*)*?))+/);
+	const trail = note.slice(end).match(/^(?:\r?\n(?:<!--SR:[^\n]*-->|> \[!sr\|card-metadata\][^\n]*(?:\r?\n> ?<!--SR:[^\n]*-->)+))+/);
 	if (trail && /<!--SR:/.test(trail[0])) end += trail[0].length;
 	return { start, end, hash: m && m[1] ? m[1] : null };
 }

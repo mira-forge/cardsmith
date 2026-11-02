@@ -58,4 +58,24 @@ describe("output parses the way the Spaced Repetition plugin parses it", () => {
 		expect(out.match(/<!--SR:/g)).toHaveLength(1);
 		expect(out.trimEnd().endsWith("%% cardsmith:end %%")).toBe(true);
 	});
+
+	it("recovers a callout-mode schedule written after the end marker", () => {
+		const legacy = `${body}\n\n%% cardsmith:start hash=00000000 %%\n#flashcards\n\nThe ==nucleus== holds the DNA.\n%% cardsmith:end %%\n> [!sr|card-metadata]\n> <!--SR:!2026-11-20,9,270-->\n`;
+		expect(stripBlock(legacy)).toBe(body);
+		const out = insert(legacy, [cards[4]!]);
+		expect(out).toContain("The ==nucleus== holds the DNA.\n> [!sr|card-metadata]\n> <!--SR:!2026-11-20,9,270-->\n\n%% cardsmith:end %%");
+		expect(out.match(/<!--SR:/g)).toHaveLength(1);
+		expect(out.trimEnd().endsWith("%% cardsmith:end %%")).toBe(true);
+	});
+
+	it("leaves a user blockquote after the end marker alone", () => {
+		const quote = "> A quote I wrote myself.\n> Second line.";
+		const note = `${body}\n\n%% cardsmith:start hash=00000000 %%\n#flashcards\n\nQ::A\n%% cardsmith:end %%\n${quote}\n`;
+		expect(stripBlock(note)).toContain(quote);
+		const b = findBlock(note)!;
+		expect(note.slice(b.end)).toBe(`\n${quote}\n`);
+		const out = insert(note, [{ type: "basic", front: "Q", back: "A" }]);
+		expect(out).toContain(`%% cardsmith:end %%\n${quote}\n`);
+		expect(out.match(/A quote I wrote myself/g)).toHaveLength(1);
+	});
 });
