@@ -29,6 +29,10 @@ Cardsmith doesn't replace your review tool; it fills it. Cards are written in th
 
 Spaced Repetition saves each card's schedule as a `<!--SR:...-->` comment right after the card. When Cardsmith rewrites its block (running a note again, a Pro folder refresh, or a synced-folder refresh), every card that keeps its question gets that comment back, so its review history stays. A reviewed card that is not in the new set is kept at the end of the block, with its comment, unless you removed it yourself in the review window, which tells you how many cards in the note have review history and lists the questions of the reviewed cards that inserting would remove. Folder runs and synced-folder refreshes never remove reviewed cards. (Versions before 0.1.5 dropped these comments on a re-run.)
 
+## Pair it with Splitsmith
+
+Split notes, then make cards. [Splitsmith](https://community.obsidian.md/plugins/splitsmith), also by Mira Forge, splits long notes into linked atomic notes by heading, by delimiter or with AI, and checks the new notes rebuild your original exactly. Smaller, focused notes make better card sets: split a long note with Splitsmith, then run Cardsmith on the new notes. Splitsmith is free, with no paid tier, and is a separate plugin; Cardsmith works the same with or without it.
+
 ## How to use
 
 1. **Pick a model.** In **Settings → Cardsmith**, choose a provider.
