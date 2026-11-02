@@ -100,7 +100,7 @@ Free covers single notes (up to 10 cards each, cloze and reversed cards included
 | | Free | Pro |
 |---|---|---|
 | Generate cards from the current note or a selection | ✓ | ✓ |
-| Review, edit and drop cards before they are saved | ✓ | ✓ |
+| Review, edit and drop cards before they are saved (review is on by default and can be turned off in settings) | ✓ | ✓ |
 | Basic question/answer cards | ✓ | ✓ |
 | Cloze and reversed cards | ✓ | ✓ |
 | Cards per note | up to 10 | up to 50 |

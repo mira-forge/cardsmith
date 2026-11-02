@@ -141,11 +141,11 @@ export async function hostedGenerate(http: HttpFn, serverUrl: string, r: HostedR
 		model: "auto",
 	};
 	let res;
-	let timer: ReturnType<typeof setTimeout> | undefined;
+	let timer: number | undefined;
 	const TIMED_OUT = Symbol("timeout");
 	try {
 		// Obsidian's requestUrl can't be aborted, so stop waiting instead (the server still settles the call).
-		const t = new Promise<typeof TIMED_OUT>((resolve) => (timer = setTimeout(() => resolve(TIMED_OUT), timeoutMs)));
+		const t = new Promise<typeof TIMED_OUT>((resolve) => (timer = window.setTimeout(() => resolve(TIMED_OUT), timeoutMs)));
 		const r2 = await Promise.race([http({ url, method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), t]);
 		if (r2 === TIMED_OUT) throw new HostedError("network", HOSTED_COPY.timeout, true);
 		res = r2;
@@ -153,7 +153,7 @@ export async function hostedGenerate(http: HttpFn, serverUrl: string, r: HostedR
 		if (e instanceof HostedError) throw e;
 		throw new HostedError("network", HOSTED_COPY.network, true);
 	} finally {
-		clearTimeout(timer);
+		window.clearTimeout(timer);
 	}
 	const j = (res.json ?? {}) as { ok?: boolean; text?: string; code?: string; reason?: string; error?: string; usage?: unknown };
 	if (res.status === 200 && j.ok && typeof j.text === "string") return { text: j.text, usage: readUsage(j.usage) };

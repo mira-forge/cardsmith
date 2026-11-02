@@ -13,7 +13,7 @@ import { CardsmithSettingTab } from "../src/settings";
 import type { HttpFn } from "../src/ai/providers";
 import { readFileSync } from "node:fs";
 
-vi.stubGlobal("window", { setInterval: () => 1, open: () => null });
+vi.stubGlobal("window", { setInterval: () => 1, setTimeout: globalThis.setTimeout.bind(globalThis), clearTimeout: globalThis.clearTimeout.bind(globalThis), open: () => null });
 
 const SERVER = "https://license.example.test";
 const USAGE: HostedUsage = { plan: "pro", used: 13, limit: 300, remaining: 287, resetsAt: Date.UTC(2026, 11, 1) };
