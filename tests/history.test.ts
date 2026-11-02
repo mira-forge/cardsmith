@@ -18,7 +18,7 @@ describe("review history survives a rewrite (fix for 0.1.4 data loss)", () => {
 	it("an unchanged card keeps its comment right after it", () => {
 		const note = reviewedNote(`What does the mitochondrion produce?::ATP\n${SR1}`);
 		const out = upsertBlock(note, buildBlock([basic("What does the mitochondrion produce?", "ATP")], "#flashcards", "bbbbbbbb"));
-		expect(out).toContain(`What does the mitochondrion produce?::ATP\n${SR1}\n%% cardsmith:end %%`);
+		expect(out).toContain(`What does the mitochondrion produce?::ATP\n${SR1}\n\n%% cardsmith:end %%`);
 		expect(findBlock(out)?.hash).toBe("bbbbbbbb");
 		expect(out.startsWith("# Cells\n\nCells are small.\n\n")).toBe(true);
 	});
@@ -70,7 +70,7 @@ describe("review history survives a rewrite (fix for 0.1.4 data loss)", () => {
 		const note = reviewedNote(["Name the stages of mitosis", "?", "Prophase, metaphase,", "anaphase, telophase", SR3].join("\n"));
 		const card = basic("Name the stages of mitosis", "Prophase, metaphase,\nanaphase, telophase");
 		const out = upsertBlock(note, buildBlock([card], "#flashcards", "g"));
-		expect(out).toContain(`anaphase, telophase\n${SR3}\n%% cardsmith:end %%`);
+		expect(out).toContain(`anaphase, telophase\n${SR3}\n\n%% cardsmith:end %%`);
 		// and SR still reads it as one card with the comment outside the answer
 		const cards = parseSrCards(out);
 		expect(cards).toHaveLength(1);
@@ -107,7 +107,7 @@ describe("review history survives a rewrite (fix for 0.1.4 data loss)", () => {
 	it("keeps comments inside SR's metadata callout", () => {
 		const note = reviewedNote(["Q1::A1", "> [!sr|card-metadata]", `> ${SR1}`].join("\n"));
 		const r = mergeBlock(note, buildBlock([basic("Q1", "A1")], "#flashcards", "k"));
-		expect(r.block).toContain(`Q1::A1\n> [!sr|card-metadata]\n> ${SR1}\n%% cardsmith:end %%`);
+		expect(r.block).toContain(`Q1::A1\n> [!sr|card-metadata]\n> ${SR1}\n\n%% cardsmith:end %%`);
 	});
 
 	it("is a no-op for notes without a block or without history, and leaves text outside the block alone", () => {
@@ -148,7 +148,7 @@ describe("reviewed cards are never removed unseen (keepUnmatched)", () => {
 		const r = mergeBlock(note, buildBlock([basic("Q1", "A1"), basic("New", "Card")], "#flashcards", "k"), true);
 		expect(r).toMatchObject({ kept: 1, dropped: 0, preserved: 1 });
 		expect(r.block).toContain(`Q1::A1\n${SR1}`);
-		expect(r.block).toContain(`New::Card\n\nGone?::Yes\n${SR2}\n%% cardsmith:end %%`);
+		expect(r.block).toContain(`New::Card\n\nGone?::Yes\n${SR2}\n\n%% cardsmith:end %%`);
 		expect(r.block).not.toContain("No history"); // unreviewed cards are still replaced
 		expect(parseSrCards(r.block).map((c) => c.front)).toEqual(["Q1", "New", "Gone?"]);
 	});

@@ -167,7 +167,7 @@ describe("sync bookkeeping (pure)", () => {
 		expect(dropped).toMatchObject({ kept: 1, dropped: 1, preserved: 0, unmatched: ["The ==nucleus== holds DNA."] });
 		const kept = carryHistory(old, fresh, true);
 		expect(kept).toMatchObject({ kept: 1, dropped: 0, preserved: 1, unmatched: ["The ==nucleus== holds DNA."] });
-		expect(kept.block).toContain(`The ==nucleus== holds DNA.\n${SR2}\n%% cardsmith:end`);
+		expect(kept.block).toContain(`The ==nucleus== holds DNA.\n${SR2}\n\n%% cardsmith:end`);
 		expect(carryHistory(old, buildBlock([], "#flashcards", "c")).unmatched).toEqual(["Q1", "The ==nucleus== holds DNA."]);
 	});
 });
@@ -296,7 +296,7 @@ describe("synced folder refresh: one reviewed batch", () => {
 		const c = vault.files.get("Course/Changed.md")!;
 		expect(c).toContain(`What is the basic unit of life?::The cell\n${SR1}`);
 		expect(c).toContain("What do mitochondria make?::ATP");
-		expect(c).toContain(`Old card?::Old\n${SR2}\n%% cardsmith:end %%`);
+		expect(c).toContain(`Old card?::Old\n${SR2}\n\n%% cardsmith:end %%`);
 		expect(classify(c)).toBe("fresh");
 		expect(vault.files.get("Course/Fresh.md")).toBe(before.get("Course/Fresh.md"));
 		expect(notices.some((x) => /^Refreshed 2 notes with 3 cards\. Kept review history for 1 card\. 1 reviewed card was not in the new set and stays at the end of the cards, with its review history\./.test(x))).toBe(true);

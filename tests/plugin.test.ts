@@ -85,7 +85,7 @@ describe("plugin with mocked Obsidian", () => {
 			const n1 = vault.files.get("Course/Note1.md")!;
 			expect(n1).toContain("What is the basic unit of life?::The cell\n<!--SR:!2026-11-02,7,250-->");
 			// a reviewed card that is not in the new set is kept, never removed unseen
-			expect(n1).toContain("Old card?::Old\n<!--SR:!2026-11-03,8,250-->\n%% cardsmith:end %%");
+			expect(n1).toContain("Old card?::Old\n<!--SR:!2026-11-03,8,250-->\n\n%% cardsmith:end %%");
 			expect(n1).toContain("Every ==organism== is made of cells."); // cloze on free
 			expect(notices.some((m) => /made 10 cards from 5 notes\. Kept review history for 1 card\. 1 reviewed card was not in the new set and stays at the end of the cards/.test(m))).toBe(true);
 			expect(notices.at(-1)).toMatch(/free folder run/);
@@ -162,7 +162,7 @@ describe("plugin with mocked Obsidian", () => {
 			await run(editor, new TFile("Mito.md"));
 			expect(text).toContain("What do mitochondria make?::ATP\n<!--SR:!2026-11-02,7,250-->");
 			expect(text).toContain("Where is ATP made?::In mitochondria");
-			expect(text).toContain("Old?::Old\n<!--SR:!2026-11-03,8,250-->\n%% cardsmith:end %%");
+			expect(text).toContain("Old?::Old\n<!--SR:!2026-11-03,8,250-->\n\n%% cardsmith:end %%");
 			expect(notices.some((m) => /only the first 24,000 were used\. Cards for the rest aren't included\.$/.test(m))).toBe(true);
 			expect(notices.some((m) => /Select the rest/.test(m))).toBe(false);
 			expect(notices.some((m) => /^Added 2 cards\. Kept review history for 1 card\. 1 reviewed card was not in the new set and stays at the end of the cards, with its review history\./.test(m))).toBe(true);

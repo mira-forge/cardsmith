@@ -236,7 +236,7 @@ export class CardsmithSettingTab extends PluginSettingTab {
 		const cards: Row[] = [
 			{
 				name: "Deck tag",
-				desc: "Added above the cards so spaced repetition plugins pick them up.",
+				desc: "Added above the cards so the Spaced Repetition plugin picks them up. Use a subdeck like #flashcards/biology to pick the deck.",
 				aliases: ["tag", "spaced repetition", "flashcards"],
 				build: (st) =>
 					st.addText((t) =>

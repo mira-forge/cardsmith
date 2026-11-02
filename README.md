@@ -76,7 +76,7 @@ On the free plan, the synced-folder commands open the Pro screen, where **Try on
 
 ### Card syntax written
 
-`Question::Answer` (basic), `Term:::Definition` (reversed), multi-line cards separated by `?` or `??`, and cloze cards using `==highlights==`, all as described in the Spaced Repetition plugin's documentation. Multi-line cards are written without blank lines inside them, because Spaced Repetition ends a card at the first blank line. The deck tag (default `#flashcards`) is configurable.
+`Question::Answer` (basic), `Term:::Definition` (reversed), multi-line cards separated by `?` or `??`, and cloze cards using `==highlights==`, all as described in the Spaced Repetition plugin's documentation. Multi-line cards are written without blank lines inside them, because Spaced Repetition ends a card at the first blank line. The deck tag (default `#flashcards`) is configurable. Use a subdeck tag such as `#flashcards/biology` to put a note's cards in a Spaced Repetition subdeck (the tag must start with one of the flashcard tags set in Spaced Repetition). Cardsmith leaves a blank line before the end of its block so Spaced Repetition never reads the block marker as part of the last card and always saves that card's schedule inside the block; schedules that older versions let it write just after the block are picked up and kept.
 
 ## Install
 

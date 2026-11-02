@@ -129,7 +129,10 @@ export function formatCard(card: Card): string {
 export function buildBlock(cards: Card[], deckTag: string, sourceHash: string): string {
 	const tag = deckTag.startsWith("#") ? deckTag : `#${deckTag}`;
 	const body = cards.map(formatCard).join("\n\n");
-	return `${BLOCK_START} hash=${sourceHash} %%\n${tag}\n\n${body}\n${BLOCK_END}`;
+	// The blank line before the end marker matters: the Spaced Repetition plugin ends a multi-line or
+	// cloze card only at a blank line, so without it the end marker would become part of the last card
+	// and SR would write that card's <!--SR:...--> schedule after the marker, outside the block.
+	return `${BLOCK_START} hash=${sourceHash} %%\n${tag}\n\n${body}\n\n${BLOCK_END}`;
 }
 
 export interface BlockInfo {
@@ -148,7 +151,12 @@ export function findBlock(note: string): BlockInfo | null {
 	const start = note.lastIndexOf(BLOCK_START, endIdx);
 	const header = note.slice(start, note.indexOf("\n", start) >= 0 ? note.indexOf("\n", start) : endIdx);
 	const m = header.match(/hash=([a-f0-9]+)/);
-	return { start, end: endIdx + BLOCK_END.length, hash: m && m[1] ? m[1] : null };
+	let end = endIdx + BLOCK_END.length;
+	// Blocks written before 0.1.9 had no blank line before the end marker, so SR may have put the last
+	// card's schedule right after it. Those lines belong to the block: count them in so they are never lost.
+	const trail = note.slice(end).match(/^(?:\r?\n(?:<!--SR:[^\n]*-->|> \[!sr\|card-metadata\][^\n]*(?:\r?\n>[^\n]*)*?))+/);
+	if (trail && /<!--SR:/.test(trail[0])) end += trail[0].length;
+	return { start, end, hash: m && m[1] ? m[1] : null };
 }
 
 /** The note text without the managed block, used for hashing and as model input. */
@@ -164,7 +172,16 @@ export function stripBlock(note: string): string {
  */
 export function mergeBlock(note: string, block: string, keepUnmatched = false): CarryResult {
 	const b = findBlock(note);
-	return carryHistory(b ? note.slice(b.start, b.end) : null, block, keepUnmatched);
+	return carryHistory(b ? oldBlockText(note, b) : null, block, keepUnmatched);
+}
+
+/** The current block's text, with any schedule SR wrote after the end marker moved back above it. */
+function oldBlockText(note: string, b: BlockInfo): string {
+	const text = note.slice(b.start, b.end);
+	const at = text.lastIndexOf(BLOCK_END);
+	const trail = text.slice(at + BLOCK_END.length);
+	if (!trail.trim()) return text;
+	return text.slice(0, at).replace(/\s+$/, "") + trail + "\n" + BLOCK_END;
 }
 
 /** Replace the managed block (keeping review history of cards that stay), or append it at the end of the note. */

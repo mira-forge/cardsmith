@@ -208,6 +208,9 @@ export function carryHistory(oldBlock: string | null, newBlock: string, keepUnma
 		}
 		const extra: string[] = [];
 		for (const o of unmatched) extra.push("", ...oldLines.slice(o.first, o.end + 1));
+		// keep exactly one blank line between cards and before the end marker (SR ends cards at blank lines)
+		if (at > 0 && (lines[at - 1] ?? "").trim() === "") extra.shift();
+		extra.push("");
 		lines.splice(at, 0, ...extra);
 		return { block: lines.join("\n"), kept, dropped: 0, preserved: unmatched.length, unmatched: questions };
 	}
